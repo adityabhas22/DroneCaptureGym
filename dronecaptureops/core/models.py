@@ -273,7 +273,13 @@ class Viewpoint(BaseModel):
 
 
 class HiddenDefect(BaseModel):
-    """Verifier-only defect state. Never expose this in observations."""
+    """Verifier-only defect state. Never expose this in observations.
+
+    Thresholds are tuned to per-target quality (0..1 from the 3D-FOV camera
+    sim). A defect is captured when (a) the simulator flags it in
+    detected_anomalies, and (b) the underlying target's per-target quality
+    clears `min_quality` in a thermal capture.
+    """
 
     defect_id: str
     target_id: str
@@ -281,10 +287,10 @@ class HiddenDefect(BaseModel):
     severity: float = Field(ge=0.0, le=1.0)
     required_sensor: SensorType = "thermal"
     requires_rgb_context: bool = True
-    min_quality: float = 0.75
-    min_resolution_score: float = 0.70
-    max_occlusion: float = 0.20
-    max_view_angle_deg: float = 55.0
+    min_quality: float = 0.55
+    min_resolution_score: float = 0.40
+    max_occlusion: float = 0.30
+    max_view_angle_deg: float = 65.0
     weight: float = 2.0
     counts_for_issue_reward: bool = True
 
@@ -345,12 +351,28 @@ class Capture(BaseModel):
     thermal_contrast_score: float = 0.0
     detected_anomalies: list[str] = Field(default_factory=list)
     quality_inputs: dict[str, float] = Field(default_factory=dict)
+    per_target_quality: dict[str, float] = Field(default_factory=dict)
+    per_target_metrics: dict[str, dict[str, float]] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+
+    def target_quality(self, target_id: str) -> float:
+        """Return per-target quality if recorded, otherwise fall back to aggregate."""
+
+        if target_id in self.per_target_quality:
+            return self.per_target_quality[target_id]
+        return self.quality_score if target_id in self.targets_visible else 0.0
 
     @property
     def quality_score(self) -> float:
-        """Aggregate quality score used by reward components."""
+        """Aggregate quality score used by reward components.
 
+        Prefers per-target quality (mean over visible targets) when populated;
+        otherwise falls back to the legacy aggregate scoring.
+        """
+
+        if self.per_target_quality:
+            scores = list(self.per_target_quality.values())
+            return round(sum(scores) / len(scores), 4)
         return round(
             0.30 * self.coverage_pct
             + 0.25 * self.resolution_score

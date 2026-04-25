@@ -11,7 +11,7 @@ def test_rollout_runner_captures_full_trajectory_and_reward_breakdowns():
         get_policy("scripted"),
         seed=2101,
         scenario_family="single_hotspot",
-        max_steps=20,
+        max_steps=30,
     )
 
     assert rollout.trajectory
@@ -27,7 +27,7 @@ def test_trace_artifacts_include_rewards_route_evidence_and_report(tmp_path):
         get_policy("scripted"),
         seed=2101,
         scenario_family="single_hotspot",
-        max_steps=20,
+        max_steps=30,
     )
     artifacts = build_trace_artifacts(rollout)
 
@@ -59,7 +59,7 @@ def test_trace_state_changes_show_policy_steps():
         get_policy("scripted"),
         seed=2101,
         scenario_family="single_hotspot",
-        max_steps=20,
+        max_steps=30,
     )
     trace = trace_rollout(rollout)
 

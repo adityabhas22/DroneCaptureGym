@@ -28,7 +28,7 @@ def test_asset_level_tools_drive_visible_inspection_workflow():
     env.step(act("takeoff", altitude_m=18))
     moved = env.step(act("move_to_asset", asset_id="row_B6", standoff_bucket="far", speed_mps=5))
     assert moved.action_result["asset_id"] == "row_B6"
-    assert moved.action_result["viewpoint_id"] == "vp_block_b_west_overview"
+    assert moved.action_result["viewpoint_id"] in {"vp_block_b_north_overview", "vp_block_b_south_overview"}
 
     pointed = env.step(act("point_camera_at", asset_id="row_B6"))
     assert pointed.telemetry.gimbal.frame_mode == "roi"

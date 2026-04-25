@@ -103,7 +103,7 @@ class CameraTools:
         if capture.sensor == "thermal":
             covered = set(world.checklist_status.thermal_rows_covered)
             for target_id in capture.targets_visible:
-                if target_id in world.mission.required_rows and capture.quality_score >= 0.55:
+                if target_id in world.mission.required_rows and capture.target_quality(target_id) >= 0.55:
                     covered.add(target_id)
             world.checklist_status.thermal_rows_covered = sorted(covered)
             anomalies = set(world.checklist_status.anomalies_detected)
@@ -112,6 +112,7 @@ class CameraTools:
         if capture.sensor == "rgb":
             for anomaly in world.checklist_status.anomalies_detected:
                 defect = next((item for item in world.hidden_defects if item.defect_id == anomaly), None)
-                target_visible = defect is not None and defect.target_id in capture.targets_visible
-                if target_visible and capture.quality_score >= 0.55:
+                if defect is None or defect.target_id not in capture.targets_visible:
+                    continue
+                if capture.target_quality(defect.target_id) >= 0.55:
                     world.checklist_status.anomaly_rgb_pairs.setdefault(anomaly, capture.photo_id)

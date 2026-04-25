@@ -9,21 +9,35 @@ def act(tool_name: str, **arguments):
 
 
 def capture_thermal_overview(env: DroneCaptureOpsEnvironment):
+    """Two staggered thermal passes covering rows B4-B8 from north + south."""
+
     env.step(act("takeoff", altitude_m=18))
     env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
-    env.step(act("fly_to_viewpoint", x=30, y=24, z=18, yaw_deg=-90, speed_mps=5))
-    env.step(act("set_gimbal", pitch_deg=-60, yaw_deg=0))
-    return env.step(act("capture_thermal", label="overview"))
+    env.step(act("fly_to_viewpoint", x=30, y=24, z=22, yaw_deg=-90, speed_mps=5))
+    env.step(act("set_camera_source", source="thermal"))
+    env.step(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
+    env.step(act("capture_thermal", label="overview B6-B8"))
+    env.step(act("fly_to_viewpoint", x=30, y=-24, z=22, yaw_deg=90, speed_mps=5))
+    env.step(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
+    return env.step(act("capture_thermal", label="overview B4-B6"))
 
 
 def complete_capture_flow(env: DroneCaptureOpsEnvironment):
+    """Full thermal coverage + RGB anomaly context + return home + land."""
+
     obs = capture_thermal_overview(env)
-    env.step(act("inspect_capture", photo_id=obs.last_capture.photo_id))
-    env.step(act("fly_to_viewpoint", x=30, y=16, z=12, yaw_deg=-90, speed_mps=4))
-    obs = env.step(act("capture_rgb", label="rgb anomaly context"))
-    if set(env.debug_world.checklist_status.anomalies_detected) - set(env.debug_world.checklist_status.anomaly_rgb_pairs):
-        env.step(act("point_camera_at", asset_id="row_B8"))
-        obs = env.step(act("capture_rgb", label="rgb secondary anomaly context"))
+    for capture in obs.capture_log:
+        if capture.sensor == "thermal":
+            env.step(act("inspect_capture", photo_id=capture.photo_id))
+    # We are at the south overview, so do the south RGB close-up first.
+    env.step(act("fly_to_viewpoint", x=30, y=-24, z=14, yaw_deg=90, speed_mps=4))
+    env.step(act("set_camera_source", source="rgb"))
+    env.step(act("set_gimbal", pitch_deg=-45, yaw_deg=0))
+    env.step(act("capture_rgb", label="rgb close-up south"))
+    env.step(act("fly_to_viewpoint", x=30, y=24, z=14, yaw_deg=-90, speed_mps=4))
+    env.step(act("set_gimbal", pitch_deg=-45, yaw_deg=0))
+    obs = env.step(act("capture_rgb", label="rgb close-up north"))
+    env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
     env.step(act("return_home"))
     return env.step(act("land"))
 

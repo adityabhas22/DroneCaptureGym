@@ -112,24 +112,53 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
                     reason="Avoid unnecessary RGB captures beyond the solar boundary.",
                 )
             )
+        # Multi-viewpoint thermal scan: a real thermal camera has ~30° vertical
+        # FOV, so a single capture cannot frame all five rows. Two viewpoints
+        # NORTH and SOUTH of the row block cover three rows each from a steep
+        # gimbal pitch (~-56°), with row B6 in the overlap. RGB close-ups
+        # provide anomaly context for either half.
         viewpoints = [
             Viewpoint(
-                viewpoint_id="vp_block_b_west_overview",
-                label="West overview for rows B4-B8",
-                pose=Pose(x=30.0, y=24.0, z=18.0, yaw_deg=-90.0),
-                asset_ids=row_ids,
+                viewpoint_id="vp_block_b_north_overview",
+                label="North overview covering rows B6-B8",
+                pose=Pose(x=30.0, y=24.0, z=22.0, yaw_deg=-90.0),
+                asset_ids=["row_B6", "row_B7", "row_B8"],
                 standoff_bucket="far",
                 suitable_modalities=["thermal"],
-                notes=["Captures all required rows when gimbal is pitched down"],
+                notes=[
+                    "Pitch the gimbal to about -56 degrees to frame rows B6-B8.",
+                    "Pair with vp_block_b_south_overview for full row coverage.",
+                ],
             ),
             Viewpoint(
-                viewpoint_id="vp_block_b_close_context",
-                label="Close RGB context for block B anomalies",
-                pose=Pose(x=30.0, y=16.0, z=12.0, yaw_deg=-90.0),
-                asset_ids=row_ids,
+                viewpoint_id="vp_block_b_south_overview",
+                label="South overview covering rows B4-B6",
+                pose=Pose(x=30.0, y=-24.0, z=22.0, yaw_deg=90.0),
+                asset_ids=["row_B4", "row_B5", "row_B6"],
+                standoff_bucket="far",
+                suitable_modalities=["thermal"],
+                notes=[
+                    "Pitch the gimbal to about -56 degrees to frame rows B4-B6.",
+                    "Pair with vp_block_b_north_overview for full row coverage.",
+                ],
+            ),
+            Viewpoint(
+                viewpoint_id="vp_block_b_close_north",
+                label="Close-up RGB context for rows B6-B8",
+                pose=Pose(x=30.0, y=24.0, z=14.0, yaw_deg=-90.0),
+                asset_ids=["row_B6", "row_B7", "row_B8"],
                 standoff_bucket="mid",
                 suitable_modalities=["rgb"],
-                notes=["Use after thermal anomaly detection"],
+                notes=["Pitch the gimbal to about -45 degrees for RGB close-up of rows B6-B8."],
+            ),
+            Viewpoint(
+                viewpoint_id="vp_block_b_close_south",
+                label="Close-up RGB context for rows B4-B6",
+                pose=Pose(x=30.0, y=-24.0, z=14.0, yaw_deg=90.0),
+                asset_ids=["row_B4", "row_B5", "row_B6"],
+                standoff_bucket="mid",
+                suitable_modalities=["rgb"],
+                notes=["Pitch the gimbal to about -45 degrees for RGB close-up of rows B4-B6."],
             ),
         ]
         mission = MissionChecklist(
@@ -211,7 +240,17 @@ def _hidden_defects_for_family(family: str, row_ids: list[str], rng: random.Rand
         shadow = rng.choice([row for row in row_ids if row != primary])
         defects.append(HiddenDefect(defect_id=f"shadow_{shadow[-2:]}", target_id=shadow, defect_type="vegetation_shadow", severity=round(rng.uniform(0.35, 0.65), 2)))
     elif family == "bypass_diode_fault":
-        defects.append(HiddenDefect(defect_id=f"diode_{primary[-2:]}", target_id=primary, defect_type="bypass_diode_fault", severity=round(rng.uniform(0.7, 0.9), 2)))
+        # Diode faults need close-standoff thermal evidence; the camera sim
+        # also gates this defect type on distance and contrast.
+        defects.append(
+            HiddenDefect(
+                defect_id=f"diode_{primary[-2:]}",
+                target_id=primary,
+                defect_type="bypass_diode_fault",
+                severity=round(rng.uniform(0.7, 0.9), 2),
+                min_quality=0.65,
+            )
+        )
     elif family == "false_positive_glare":
         defects.append(
             HiddenDefect(

@@ -58,7 +58,11 @@ class RandomPolicy:
 
 @dataclass
 class WeakScriptedPolicy:
-    """Weak baseline that gathers partial evidence and submits too early."""
+    """Weak baseline that gathers partial evidence and submits too early.
+
+    Captures only the north half of the row block, never returns home, and
+    submits an incomplete pack — exactly the demo failure mode.
+    """
 
     name: str = "weak_scripted"
 
@@ -68,11 +72,17 @@ class WeakScriptedPolicy:
             act("get_mission_checklist"),
             act("list_assets"),
             act("takeoff", altitude_m=18),
-            act("move_to_asset", asset_id="row_B6", standoff_bucket="far", speed_mps=5),
-            act("point_camera_at", asset_id="row_B6"),
+            act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5),
+            act("fly_to_viewpoint", x=30, y=12, z=30, yaw_deg=-90, speed_mps=5),
+            act("set_gimbal", pitch_deg=-75, yaw_deg=0),
             act("capture_thermal", label="single overview"),
             act("inspect_capture", photo_id="IMG-T-001"),
-            act("submit_evidence_pack", summary="Partial overview submitted.", photo_ids=["IMG-T-001"], findings=[]),
+            act(
+                "submit_evidence_pack",
+                summary="Partial overview submitted.",
+                photo_ids=["IMG-T-001"],
+                findings=[],
+            ),
         ]
         if step < len(sequence):
             return sequence[step]
@@ -81,52 +91,75 @@ class WeakScriptedPolicy:
 
 @dataclass
 class ScriptedPolicy:
-    """Scripted baseline that uses the richer tool surface."""
+    """Scripted baseline that completes the multi-viewpoint solar mission.
+
+    Two thermal captures from staggered overhead viewpoints cover all five
+    rows, RGB close-ups capture anomaly context if detected, and the
+    evidence pack cites the thermal photos for coverage and the RGB photos
+    for issues.
+    """
 
     name: str = "scripted"
 
     def next_action(self, observation: DroneObservation, history: list[dict]) -> RawDroneAction:
         step = len(history)
-        if step == 0:
-            return act("get_mission_checklist")
-        if step == 1:
-            return act("list_assets")
-        if step == 2:
-            return act("takeoff", altitude_m=18)
-        if step == 3:
-            return act("move_to_asset", asset_id="row_B6", standoff_bucket="far", speed_mps=5)
-        if step == 4:
-            return act("point_camera_at", asset_id="row_B6")
-        if step == 5:
-            return act("set_camera_source", source="thermal")
-        if step == 6:
-            return act("capture_thermal", label="thermal overview B4-B8")
-        if step == 7:
-            return act("inspect_capture", photo_id="IMG-T-001")
-        if step == 8:
-            return act("move_to_asset", asset_id="row_B6", standoff_bucket="mid", speed_mps=4)
-        if step == 9:
-            return act("point_camera_at", asset_id="row_B6")
-        if step == 10:
-            return act("set_camera_source", source="rgb")
-        if step == 11:
-            return act("capture_rgb", label="rgb anomaly context")
-        if step == 12:
-            return act("estimate_return_margin")
-        if step == 13:
-            return act("return_home")
-        if step == 14:
-            return act("land")
+        sequence: list[RawDroneAction] = [
+            act("get_mission_checklist"),
+            act("list_assets"),
+            act("takeoff", altitude_m=18),
+            # Bypass the substation no-fly zone via the north corridor.
+            act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5),
+            # North overview: covers rows B6-B8 from y=24 looking south.
+            act("fly_to_viewpoint", x=30, y=24, z=22, yaw_deg=-90, speed_mps=5),
+            act("set_camera_source", source="thermal"),
+            act("set_gimbal", pitch_deg=-56, yaw_deg=0),
+            act("capture_thermal", label="thermal overview B6-B8"),
+            act("inspect_capture", photo_id="IMG-T-001"),
+            # South overview: covers rows B4-B6 from y=-24 looking north.
+            act("fly_to_viewpoint", x=30, y=-24, z=22, yaw_deg=90, speed_mps=5),
+            act("set_gimbal", pitch_deg=-56, yaw_deg=0),
+            act("capture_thermal", label="thermal overview B4-B6"),
+            act("inspect_capture", photo_id="IMG-T-002"),
+            # RGB anomaly context: south close-up first (we're already south).
+            act("fly_to_viewpoint", x=30, y=-24, z=14, yaw_deg=90, speed_mps=4),
+            act("set_camera_source", source="rgb"),
+            act("set_gimbal", pitch_deg=-45, yaw_deg=0),
+            act("capture_rgb", label="rgb close-up south"),
+            # RGB north close-up.
+            act("fly_to_viewpoint", x=30, y=24, z=14, yaw_deg=-90, speed_mps=4),
+            act("set_gimbal", pitch_deg=-45, yaw_deg=0),
+            act("capture_rgb", label="rgb close-up north"),
+            act("estimate_return_margin"),
+            act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5),
+            act("return_home"),
+            act("land"),
+        ]
+        if step < len(sequence):
+            return sequence[step]
+
         photo_ids = [capture.photo_id for capture in observation.capture_log]
+        thermal_ids = [capture.photo_id for capture in observation.capture_log if capture.sensor == "thermal"]
+        rgb_ids = [capture.photo_id for capture in observation.capture_log if capture.sensor == "rgb"]
         findings = [
-            {"finding": anomaly, "photo_ids": photo_ids}
+            {"finding": anomaly, "photo_ids": rgb_ids or photo_ids}
             for anomaly in observation.checklist_status.anomalies_detected
         ]
         return act(
             "submit_evidence_pack",
-            summary="Rows B4-B8 inspected with thermal overview and RGB context for detected anomalies.",
+            summary=(
+                "Rows B4-B8 inspected via two overhead thermal passes and RGB "
+                "close-ups; returned home with battery reserve."
+            ),
             photo_ids=photo_ids,
             findings=findings,
+            evidence=[
+                {
+                    "requirement_id": "thermal_overview_rows_B4_B8",
+                    "status": "satisfied",
+                    "photo_ids": thermal_ids,
+                }
+            ],
+            safety_notes=["Returned home with battery reserve."],
         )
 
 

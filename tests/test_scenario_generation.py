@@ -19,6 +19,8 @@ def test_solar_scenario_populates_generic_assets_zones_and_viewpoints():
     assert all(asset.safe_standoff_bands for asset in scenario.assets)
     assert scenario.airspace_zones[0].constraint_level == "hard"
     assert {viewpoint.viewpoint_id for viewpoint in scenario.viewpoints} == {
-        "vp_block_b_west_overview",
-        "vp_block_b_close_context",
+        "vp_block_b_north_overview",
+        "vp_block_b_south_overview",
+        "vp_block_b_close_north",
+        "vp_block_b_close_south",
     }

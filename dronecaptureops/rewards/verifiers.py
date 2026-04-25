@@ -61,15 +61,20 @@ def valid_target_captures(
     min_quality: float = MIN_ROW_QUALITY,
     cited_only: bool = False,
 ) -> list[Capture]:
+    """Return captures whose per-target quality for this row clears min_quality."""
+
     cited = report_cited_photo_ids(world.final_report)
-    captures = [
-        capture
-        for capture in world.capture_log
-        if capture.sensor == sensor
-        and target_id in capture.targets_visible
-        and capture.quality_score >= min_quality
-        and (not cited_only or capture.photo_id in cited)
-    ]
+    captures = []
+    for capture in world.capture_log:
+        if capture.sensor != sensor:
+            continue
+        if cited_only and capture.photo_id not in cited:
+            continue
+        if target_id not in capture.targets_visible:
+            continue
+        if capture.target_quality(target_id) < min_quality:
+            continue
+        captures.append(capture)
     return captures
 
 
@@ -110,37 +115,46 @@ def compute_required_coverage(world: EpisodeWorld, *, cited_only: bool = False) 
 
 
 def defect_captured(world: EpisodeWorld, defect: HiddenDefect, *, cited_only: bool = False) -> tuple[float, dict[str, Any]]:
-    thermal = [
-        capture
-        for capture in valid_target_captures(
-            world,
-            defect.target_id,
-            sensor=defect.required_sensor,
-            min_quality=defect.min_quality,
-            cited_only=cited_only,
-        )
-        if defect.defect_id in capture.detected_anomalies
-        and capture.resolution_score >= defect.min_resolution_score
-        and capture.occlusion_pct <= defect.max_occlusion
-        and _view_angle_deg(capture) <= defect.max_view_angle_deg
-    ]
+    """Score whether a hidden defect has been captured at sufficient quality.
+
+    Uses per-target quality (set by the camera simulator) rather than aggregate
+    capture quality so that a thermal frame with a well-framed defect target
+    counts even if the photo overall has other rows out of frame.
+    """
+
+    cited = report_cited_photo_ids(world.final_report)
+    thermal = []
+    for capture in world.capture_log:
+        if capture.sensor != defect.required_sensor:
+            continue
+        if cited_only and capture.photo_id not in cited:
+            continue
+        if defect.defect_id not in capture.detected_anomalies:
+            continue
+        if capture.target_quality(defect.target_id) < defect.min_quality:
+            continue
+        if capture.occlusion_pct > defect.max_occlusion:
+            continue
+        thermal.append(capture)
     if not thermal:
         return 0.0, {"defect_id": defect.defect_id, "thermal": False, "rgb_context": False}
     if not defect.requires_rgb_context:
         return 1.0, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": True}
-    rgb_context = [
-        capture
-        for capture in valid_target_captures(
-            world,
-            defect.target_id,
-            sensor="rgb",
-            min_quality=MIN_ROW_QUALITY,
-            cited_only=cited_only,
-        )
-        if capture.resolution_score >= 0.55
-        and capture.occlusion_pct <= max(defect.max_occlusion, 0.35)
-        and _view_angle_deg(capture) <= defect.max_view_angle_deg
-    ]
+
+    rgb_context = []
+    rgb_threshold = max(MIN_ROW_QUALITY, defect.min_quality - 0.10)
+    for capture in world.capture_log:
+        if capture.sensor != "rgb":
+            continue
+        if cited_only and capture.photo_id not in cited:
+            continue
+        if defect.target_id not in capture.targets_visible:
+            continue
+        if capture.target_quality(defect.target_id) < rgb_threshold:
+            continue
+        if capture.occlusion_pct > max(defect.max_occlusion, 0.35):
+            continue
+        rgb_context.append(capture)
     if rgb_context:
         return 1.0, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": True}
     return 0.6, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": False}
@@ -422,5 +436,3 @@ def _ids_from(item: dict[str, Any], key: str) -> set[str]:
     return set()
 
 
-def _view_angle_deg(capture: Capture) -> float:
-    return (1.0 - clamp(capture.view_angle_score, 0.0, 1.0)) * 90.0
