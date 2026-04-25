@@ -539,6 +539,14 @@ def main() -> int:
                             )
                         except Exception as exc:  # noqa: BLE001 — record + continue
                             LOG.exception("[%s] cell failed (%s seed=%d): %s", model, cell.task_id, cell.seed, exc)
+                            # Don't lose the per-turn audit trail just because the
+                            # cell crashed mid-rollout. The HF policy captures every
+                            # API outcome (success, parse error, 400 truncation)
+                            # into self.turns; flush whatever was recorded plus a
+                            # synthetic crash marker.
+                            if audit_handle is not None:
+                                _write_audit_record(audit_handle, model, cell, policy, result=None, crash_exc=exc)
+                                audit_handle.flush()
                             continue
 
                         oracle_ref = oracle_refs.get((cell.task_id, cell.seed))
@@ -549,6 +557,7 @@ def main() -> int:
 
                         if audit_handle is not None:
                             _write_audit_record(audit_handle, model, cell, policy, result)
+                            audit_handle.flush()
                 finally:
                     if engine is not None:
                         del engine
@@ -604,14 +613,28 @@ def _build_policy(args, model: str, env: DroneCaptureOpsEnvironment, cell: EvalC
     raise SystemExit(f"unknown --provider: {args.provider!r}")
 
 
-def _write_audit_record(handle, model: str, cell: EvalCell, policy, result: RolloutResult) -> None:
-    """Persist the full per-turn HF inference trail for downstream auditing.
+def _write_audit_record(
+    handle,
+    model: str,
+    cell: EvalCell,
+    policy,
+    result: RolloutResult | None,
+    *,
+    crash_exc: BaseException | None = None,
+) -> None:
+    """Persist the full per-turn inference trail for downstream auditing.
 
-    For HF policy the policy itself records every (request_messages,
-    response_text, tool_calls, finish_reason, latency_ms, retries,
-    parse_error) — we just dump those. For other providers we record
-    the trajectory's actions + observations as a fallback so the audit
-    file is uniformly populated.
+    LLM policies (HF, OpenAI, Anthropic, vLLM) record every
+    (request_messages, response_text, tool_calls, finish_reason,
+    prompt/completion/total tokens, latency_ms, retries, parse_error,
+    thinking_content, truncated, provider, api_error) on `policy.turns`;
+    we dump those rows here. For offline/scripted policies we fall back to
+    the trajectory's actions + observations.
+
+    `crash_exc` is set when the rollout crashed mid-cell (uncaught
+    exception in runner.run). We still flush whatever turns the policy
+    recorded plus a marker turn capturing the crash, so the audit file
+    is forensically complete even for cells that produced no row.
     """
 
     turns = getattr(policy, "turns", None) or []
@@ -635,12 +658,15 @@ def _write_audit_record(handle, model: str, cell: EvalCell, policy, result: Roll
                         "latency_ms": turn.latency_ms,
                         "retries": turn.retries,
                         "parse_error": turn.parse_error,
+                        "truncated": getattr(turn, "truncated", False),
+                        "provider": getattr(turn, "provider", None),
+                        "api_error": getattr(turn, "api_error", None),
                     },
                     sort_keys=True,
                 )
                 + "\n"
             )
-    else:
+    elif result is not None:
         # Offline / vLLM policies don't record per-turn audit records;
         # still emit the trajectory steps so the audit file isn't empty.
         for step_record in result.trajectory:
@@ -661,6 +687,27 @@ def _write_audit_record(handle, model: str, cell: EvalCell, policy, result: Roll
                 )
                 + "\n"
             )
+
+    if crash_exc is not None:
+        # Synthetic marker so downstream tooling can find crashed cells
+        # without scanning for absent rows.
+        handle.write(
+            json.dumps(
+                {
+                    "model": model,
+                    "task_id": cell.task_id,
+                    "seed": cell.seed,
+                    "step": -1,
+                    "crash": True,
+                    "crash_exc_type": type(crash_exc).__name__,
+                    "crash_message": str(crash_exc)[:500],
+                    "n_turns_before_crash": len(turns),
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
     handle.flush()
 
 

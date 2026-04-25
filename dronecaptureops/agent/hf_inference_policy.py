@@ -66,6 +66,10 @@ class HFInferenceTurnRecord:
     parse_error: str | None
     raw_response: dict[str, Any]
     thinking_content: str = ""
+    # Forensics — populated even when the API call itself failed.
+    truncated: bool = False
+    provider: str | None = None
+    api_error: dict[str, Any] | None = None
 
 
 @dataclass
@@ -84,10 +88,13 @@ class HFInferencePolicy(_LLMPolicyBase):
     model: str = "Qwen/Qwen3-14B-Instruct-2507"
     temperature: float = 0.4
     top_p: float = 0.9
-    # 8192 covers a Qwen3 base variant emitting ~5K tokens of <think> plus
-    # the actual tool call, including the 1K-token submit_evidence_pack tail.
-    # Drop to 1024 for non-reasoning variants if cost matters.
-    max_tokens: int = 8192
+    # 16384 covers Qwen3 base variants whose <think> traces sometimes spike
+    # to ~10K tokens before emitting the tool call. The provider strips
+    # `<think>` from message.content for display but it still counts toward
+    # max_tokens, so under-sizing this field shows up as 400 tool_use_failed
+    # truncations rather than parse errors. Drop to ~1024 for non-reasoning
+    # variants (Qwen3-Instruct-2507, GPT-4o, Sonnet) if cost matters.
+    max_tokens: int = 16384
     api_base_url: str = HF_DEFAULT_BASE_URL
     api_key: str | None = None
     use_tool_calls: bool = True
@@ -151,7 +158,39 @@ class HFInferencePolicy(_LLMPolicyBase):
             kwargs["tools"] = self._tool_schemas
             kwargs["tool_choice"] = "auto"
 
-        response, retries, latency_ms = self._call_with_retry(**kwargs)
+        # Capture every API outcome — including hard failures — into a turn
+        # record. Crashed cells with no JSONL trail are forensically useless;
+        # we want every interaction reviewable post-hoc.
+        try:
+            response, retries, latency_ms = self._call_with_retry(**kwargs)
+        except Exception as exc:  # noqa: BLE001 — we triage and re-raise
+            api_error = _serialise_api_error(exc)
+            failed_text = api_error.get("failed_generation") or ""
+            error_msg = f"{type(exc).__name__}: {api_error.get('message', str(exc))[:200]}"
+            if self.record_turns:
+                self.turns.append(
+                    HFInferenceTurnRecord(
+                        step=len(self.turns) + 1,
+                        request_messages=request_messages,
+                        response_text=failed_text,
+                        response_tool_calls=[],
+                        finish_reason="api_error",
+                        prompt_tokens=None,
+                        completion_tokens=None,
+                        total_tokens=None,
+                        latency_ms=0,
+                        retries=self.max_retries,
+                        parse_error=error_msg,
+                        raw_response={},
+                        thinking_content="",
+                        truncated=("tool_use_failed" in str(exc) or "max_tokens" in str(exc).lower()),
+                        provider=None,
+                        api_error=api_error,
+                    )
+                )
+            # Surface as ActionValidationError so the rollout records a
+            # parse-style failure for this turn instead of crashing the cell.
+            raise ActionValidationError(error_msg) from exc
 
         message = response.choices[0].message
         finish_reason = response.choices[0].finish_reason
@@ -199,6 +238,9 @@ class HFInferencePolicy(_LLMPolicyBase):
                     parse_error=parse_error,
                     raw_response=_serialise_response(response),
                     thinking_content=thinking_content,
+                    truncated=(finish_reason == "length"),
+                    provider=getattr(response, "model", None) or _provider_from_response(response),
+                    api_error=None,
                 )
             )
 
@@ -330,6 +372,54 @@ def _short_exc(exc: Exception | None) -> str:
         return "unknown"
     text = repr(exc)
     return text if len(text) <= 200 else text[:197] + "..."
+
+
+def _serialise_api_error(exc: Exception) -> dict[str, Any]:
+    """Pull every available forensic field off an OpenAI/httpx exception.
+
+    The HF router returns a structured 400 with `failed_generation` (the
+    truncated text the model produced before the provider gave up parsing
+    its tool call). We capture that, the status code, the error message,
+    and any provider headers so post-hoc analysis can reconstruct exactly
+    what went wrong without re-running the request.
+    """
+
+    info: dict[str, Any] = {
+        "exc_type": type(exc).__name__,
+        "message": str(exc)[:500],
+    }
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+    if status is not None:
+        info["status_code"] = status
+
+    # OpenAI BadRequestError exposes `body` as a dict with provider-specific keys.
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error", body) if isinstance(body.get("error"), dict) else body
+        if isinstance(err, dict):
+            for key in ("message", "code", "type", "failed_generation", "param"):
+                if key in err:
+                    info[key] = err[key]
+    return info
+
+
+def _provider_from_response(response: Any) -> str | None:
+    """Best-effort: read the upstream provider name from response metadata.
+
+    HF's router returns the underlying provider via the `model` field when
+    pinned (e.g. `Qwen/Qwen3-32B:fireworks-ai`) and via response headers
+    otherwise. Returns None when not surfaced.
+    """
+
+    headers = getattr(response, "_response_headers", None)
+    if isinstance(headers, dict):
+        for k in ("x-served-by", "x-provider", "x-routed-to"):
+            if k in headers:
+                return str(headers[k])
+    return None
 
 
 __all__ = ["HFInferencePolicy", "HFInferenceTurnRecord", "HF_DEFAULT_BASE_URL"]

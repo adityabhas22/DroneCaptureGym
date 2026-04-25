@@ -153,11 +153,140 @@ class _Solver:
             and zone.min_altitude_m <= z <= zone.max_altitude_m
         )
 
+    def _all_hard_zones(self):
+        """Hard zones (no_fly + obstacle), including the always-on substation NFZ
+        from the base solar map."""
+
+        zones = list(self.obstacle_zones) + list(self.no_fly_zones)
+        # Substation NFZ is always present in the solar domain even if not in spec.
+        for az in self.obs.site_map.airspace_zones:
+            if az.zone_type in ("no_fly", "obstacle") and az.constraint_level == "hard":
+                # Skip duplicates already in spec
+                if any(z.zone_id == az.zone_id for z in zones):
+                    continue
+                zones.append(az)
+        return zones
+
     def _is_blocked(self, x: float, y: float, z: float) -> bool:
-        return any(self._zone_contains(z_, x, y, z) for z_ in self.obstacle_zones + self.no_fly_zones)
+        for zone in self._all_hard_zones():
+            if not self._zone_active_now(zone.zone_id):
+                continue
+            if z < zone.min_altitude_m or z > zone.max_altitude_m:
+                continue
+            if zone.min_x <= x <= zone.max_x and zone.min_y <= y <= zone.max_y:
+                return True
+        return False
+
+    def _segment_blocked(self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float, samples: int = 32) -> bool:
+        """Sample a segment and report if any sample is inside a hard zone.
+
+        Mirrors `simulation.safety.SafetyChecker.validate_waypoint`."""
+
+        for zone in self._all_hard_zones():
+            if not self._zone_active_now(zone.zone_id):
+                continue
+            # Altitude check uses the *target* altitude in safety; mirror that.
+            if z2 < zone.min_altitude_m or z2 > zone.max_altitude_m:
+                continue
+            for idx in range(samples + 1):
+                t = idx / samples
+                x = x1 + (x2 - x1) * t
+                y = y1 + (y2 - y1) * t
+                if zone.min_x <= x <= zone.max_x and zone.min_y <= y <= zone.max_y:
+                    return True
+        return False
 
     def _is_in_privacy(self, x: float, y: float, z: float) -> bool:
         return any(self._zone_contains(z_, x, y, z) for z_ in self.privacy_zones)
+
+    # Small library of waypoints for stitching safe routes around obstacles.
+    _CORRIDOR_WAYPOINTS: tuple[tuple[float, float, float], ...] = (
+        (0.0, 24.0, 18.0),
+        (0.0, 38.0, 18.0),
+        (0.0, -24.0, 18.0),
+        (0.0, -30.0, 18.0),
+        (5.0, 24.0, 22.0),
+        (5.0, -24.0, 22.0),
+        (5.0, 38.0, 22.0),
+        (5.0, -30.0, 22.0),
+        (30.0, 38.0, 22.0),
+        (30.0, 32.0, 22.0),
+        (30.0, -30.0, 24.0),
+        (40.0, 24.0, 22.0),
+        (40.0, 0.0, 22.0),
+        (40.0, -24.0, 22.0),
+        (40.0, 38.0, 22.0),
+        (40.0, -30.0, 22.0),
+        (45.0, 8.0, 16.0),
+        (45.0, 0.0, 16.0),
+        (50.0, 24.0, 22.0),
+        (50.0, -24.0, 22.0),
+        (50.0, 0.0, 22.0),
+    )
+
+    def _find_safe_route(self, x1: float, y1: float, z1: float, x2: float, y2: float, z2: float) -> list[tuple[float, float, float]]:
+        """Return a list of intermediate waypoints (excluding start/end) such
+        that each consecutive segment is unblocked. Returns [] if direct works,
+        or None if no route is found in the candidate set.
+        """
+
+        if not self._segment_blocked(x1, y1, z1, x2, y2, z2):
+            return []
+        # Single-hop search.
+        for wx, wy, wz in self._CORRIDOR_WAYPOINTS:
+            if self._is_blocked(wx, wy, wz):
+                continue
+            if not self._segment_blocked(x1, y1, z1, wx, wy, wz) and not self._segment_blocked(wx, wy, wz, x2, y2, z2):
+                return [(wx, wy, wz)]
+        # Two-hop search.
+        for wx1, wy1, wz1 in self._CORRIDOR_WAYPOINTS:
+            if self._is_blocked(wx1, wy1, wz1):
+                continue
+            if self._segment_blocked(x1, y1, z1, wx1, wy1, wz1):
+                continue
+            for wx2, wy2, wz2 in self._CORRIDOR_WAYPOINTS:
+                if (wx1, wy1, wz1) == (wx2, wy2, wz2):
+                    continue
+                if self._is_blocked(wx2, wy2, wz2):
+                    continue
+                if self._segment_blocked(wx1, wy1, wz1, wx2, wy2, wz2):
+                    continue
+                if self._segment_blocked(wx2, wy2, wz2, x2, y2, z2):
+                    continue
+                return [(wx1, wy1, wz1), (wx2, wy2, wz2)]
+        # Three-hop fallback through corner waypoints.
+        for wx1, wy1, wz1 in self._CORRIDOR_WAYPOINTS:
+            if self._is_blocked(wx1, wy1, wz1) or self._segment_blocked(x1, y1, z1, wx1, wy1, wz1):
+                continue
+            for wx2, wy2, wz2 in self._CORRIDOR_WAYPOINTS:
+                if (wx1, wy1, wz1) == (wx2, wy2, wz2) or self._is_blocked(wx2, wy2, wz2):
+                    continue
+                if self._segment_blocked(wx1, wy1, wz1, wx2, wy2, wz2):
+                    continue
+                for wx3, wy3, wz3 in self._CORRIDOR_WAYPOINTS:
+                    if (wx3, wy3, wz3) in ((wx1, wy1, wz1), (wx2, wy2, wz2)) or self._is_blocked(wx3, wy3, wz3):
+                        continue
+                    if self._segment_blocked(wx2, wy2, wz2, wx3, wy3, wz3):
+                        continue
+                    if self._segment_blocked(wx3, wy3, wz3, x2, y2, z2):
+                        continue
+                    return [(wx1, wy1, wz1), (wx2, wy2, wz2), (wx3, wy3, wz3)]
+        return []  # last-resort: try direct anyway
+
+    def _safe_fly_to(self, x: float, y: float, z: float, yaw_deg: float, *, speed_mps: float = 5.0) -> bool:
+        """Plan a safe route to (x, y, z, yaw) and execute it.
+
+        Returns True on success, False if the env errored at any point. The
+        caller is responsible for replanning. Steps consumed = len(route)+1.
+        """
+
+        pose = self.obs.telemetry.pose
+        route = self._find_safe_route(pose.x, pose.y, pose.z, x, y, z)
+        for (wx, wy, wz) in route:
+            ok = self._try_step(act("fly_to_viewpoint", x=wx, y=wy, z=wz, yaw_deg=yaw_deg, speed_mps=speed_mps))
+            if not ok:
+                return False
+        return self._try_step(act("fly_to_viewpoint", x=x, y=y, z=z, yaw_deg=yaw_deg, speed_mps=speed_mps))
 
     def _row_y(self, row_id: str) -> float | None:
         for asset in self.obs.visible_assets:
@@ -213,17 +342,27 @@ class _Solver:
     def _bypass_to_corridor(self) -> None:
         """Fly out of the home pad onto a safe east-west corridor.
 
-        Default y=20. If a hard obstacle/no-fly blocks that, escalate to
-        the far-north corridor (y=38). Tasks shipping a north-side
-        obstacle (compound_safety_corridor, obstacle_detour_inspection)
-        always route via y=38.
+        Default y=20. Falls back to far-north (y=38) if blocked. The
+        thermal-coverage phase will route safely from there to the
+        overview viewpoints regardless of which corridor we picked.
         """
 
-        # Spec-aware: any blocking zone overlapping (0, 20)?
-        if self._is_blocked(0, 20, 18):
-            x, y, z, yaw = STANDARD_BYPASS_FAR_NORTH
-        else:
-            x, y, z, yaw = STANDARD_BYPASS_NORTH
+        # Pick the highest-y safe corridor: y=20 > y=38.
+        candidates = [
+            STANDARD_BYPASS_NORTH,
+            STANDARD_BYPASS_FAR_NORTH,
+            STANDARD_BYPASS_SOUTH,
+            (0.0, -30.0, 18.0, 0.0),
+        ]
+        for x, y, z, yaw in candidates:
+            if self._is_blocked(x, y, z):
+                continue
+            if self._segment_blocked(0, 0, 18, x, y, z):
+                continue
+            self._step(act("fly_to_viewpoint", x=x, y=y, z=z, yaw_deg=yaw, speed_mps=5))
+            return
+        # Fallback: just try far-north.
+        x, y, z, yaw = STANDARD_BYPASS_FAR_NORTH
         self._step(act("fly_to_viewpoint", x=x, y=y, z=z, yaw_deg=yaw, speed_mps=5))
 
     def _degraded_then_clean_capture(self) -> None:
@@ -246,8 +385,8 @@ class _Solver:
         - Multi-row tasks may need both north (y=24) and south (y=-24) overviews.
         - High-quality tasks (min_capture_quality >= 0.70) use the
           north-edge viewpoint at (30, 32, 22) for tighter framing on B7/B8.
-        - When the standard north overview is blocked, the solver calls
-          `request_route_replan` and uses a recommended thermal viewpoint.
+        - Safe routing is delegated to `_safe_fly_to` which detours via the
+          corridor library when the direct segment is blocked.
         """
 
         if not skip_camera_source_set:
@@ -257,30 +396,32 @@ class _Solver:
         row_ys = {r: y for r, y in row_ys.items() if y is not None}
         needs_north = any(y > 0 for y in row_ys.values())
         needs_south = any(y < 0 for y in row_ys.values())
-        if not needs_north and not needs_south:
-            # Only y=0 row (B6) — south overview covers it.
+        only_b6 = (
+            len(row_ys) == 1
+            and "row_B6" in row_ys
+            and abs(row_ys["row_B6"]) < 0.5
+        )
+        if not needs_north and not needs_south and not only_b6:
             needs_south = True
 
-        # Order matters for safety: from the y=20 bypass corridor, the direct
-        # path to the south overview at (30, -24, 22) crosses the substation
-        # NFZ at y=0. We always traverse via x=30, y=+24 first (safe transit)
-        # before going south. If needs_north is true we capture at the transit;
-        # if not, the transit is silent (one fly_to_viewpoint, no capture).
-        transited_via_north = False
+        # If only row_B6 is required, one overview that covers B6 is enough.
+        # Prefer north (avoids the longer south detour through materials zones)
+        # unless the north pose is blocked and south is open.
+        if only_b6:
+            if not self._is_blocked(*STANDARD_NORTH_OVERVIEW[:3]):
+                self._do_north_thermal_overview(row_ys)
+                return
+            if not self._is_blocked(*STANDARD_SOUTH_OVERVIEW[:3]):
+                self._capture_thermal_at(*STANDARD_SOUTH_OVERVIEW, label="thermal overview rows ['row_B6']")
+                return
+            self._do_north_thermal_overview(row_ys)
+            return
+
         if needs_north:
             self._do_north_thermal_overview(row_ys)
-            transited_via_north = True
 
         if needs_south:
-            if not transited_via_north:
-                # Silent transit through the north corridor to position above NFZ
-                # before flying south. This adds 1 step but is safety-required.
-                if not self._is_blocked(30, 24, 22):
-                    self._try_step(act("fly_to_viewpoint", x=30, y=24, z=22, yaw_deg=-90, speed_mps=5))
-                else:
-                    # North blocked too — go via far-north corridor.
-                    self._try_step(act("fly_to_viewpoint", x=30, y=38, z=22, yaw_deg=-90, speed_mps=5))
-            self._capture_thermal_at(*STANDARD_SOUTH_OVERVIEW, label=f"thermal overview rows {sorted(row_ys)}")
+            self._do_south_thermal_overview(row_ys)
 
     def _do_north_thermal_overview(self, row_ys: dict[str, float]) -> None:
         """North overview with three fallback layers."""
