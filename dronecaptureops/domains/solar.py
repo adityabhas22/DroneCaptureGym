@@ -215,6 +215,7 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
             telemetry.battery_pct = task.initial_battery_pct
             airspace_zones.extend(_airspace_zones_from_task(task))
             viewpoints.extend(_viewpoints_from_task(task))
+            obstacle_schedule_entries.extend(_obstacle_schedule_from_task(task))
             max_steps = task.max_steps
             mission.required_rows = list(task.required_rows)
             mission.must_return_home = task.must_return_home
@@ -251,7 +252,7 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
             obstacle_schedule=obstacle_schedule_entries,
             verifier_evidence_requirements=[
                 {"asset_id": row_id, "modality": "thermal", "quality_threshold": mission.min_capture_quality}
-                for row_id in row_ids
+                for row_id in mission.required_rows
             ],
             weather=weather,
             max_steps=max_steps,
@@ -462,3 +463,19 @@ def _viewpoints_from_task(task: SolarTaskSpec) -> list[Viewpoint]:
             )
         )
     return viewpoints
+
+
+def _obstacle_schedule_from_task(task: SolarTaskSpec) -> list[dict]:
+    """Convert task obstacle schedule specs to world schedule entries."""
+
+    entries: list[dict] = []
+    for spec in task.obstacle_schedule:
+        entry = {
+            "event_id": spec.event_id,
+            "zone_id": spec.zone_id,
+            "active_from_step": spec.active_from_step,
+        }
+        if spec.active_until_step is not None:
+            entry["active_until_step"] = spec.active_until_step
+        entries.append(entry)
+    return entries

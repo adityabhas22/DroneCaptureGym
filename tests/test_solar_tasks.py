@@ -51,8 +51,8 @@ _SCRIPTED_BASELINE_TASKS: tuple[str, ...] = (
 )
 
 
-def test_solar_task_catalog_has_thirty_named_tasks():
-    assert len(SOLAR_TASKS) == 30
+def test_solar_task_catalog_has_forty_five_named_tasks():
+    assert len(SOLAR_TASKS) == 45
     assert set(_SCRIPTED_BASELINE_TASKS) <= set(SOLAR_TASKS)
 
 

@@ -60,6 +60,16 @@ class ViewpointSpec:
 
 
 @dataclass(frozen=True)
+class ObstacleScheduleSpec:
+    """Activation window for a task-specific obstacle zone."""
+
+    event_id: str
+    zone_id: str
+    active_from_step: int = 0
+    active_until_step: int | None = None
+
+
+@dataclass(frozen=True)
 class SolarTaskSpec:
     """Visible mission and deterministic scenario modifications."""
 
@@ -84,6 +94,7 @@ class SolarTaskSpec:
     must_return_home: bool = True
     extra_zones: tuple[ZoneSpec, ...] = ()
     extra_viewpoints: tuple[ViewpointSpec, ...] = ()
+    obstacle_schedule: tuple[ObstacleScheduleSpec, ...] = ()
     verifier_notes: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -974,6 +985,466 @@ SOLAR_TASKS: dict[str, SolarTaskSpec] = {
         ),
         min_report_grounding_score=0.85,
         extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "return_margin_decision_point": SolarTaskSpec(
+        task_id="return_margin_decision_point",
+        name="Return-Margin Decision Point",
+        instruction=(
+            "Survey rows B4-B8 under a tight reserve. After thermal coverage reveals more than one "
+            "anomaly, estimate the return margin before deciding whether to pursue the lower-value "
+            "confirmation. Confirm the critical issue first and leave unsafe follow-up as an open item."
+        ),
+        success_criteria=(
+            "Cover required rows with accepted thermal evidence where feasible.",
+            "Confirm the highest-weight anomaly before lower-value follow-up.",
+            "Use return-margin evidence to justify any open item.",
+            "Return home and land before final submission.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Battery reserve is tight enough that a second RGB follow-up can threaten the reserve.",),
+        task_tags=("battery", "return-margin", "triage", "open-items"),
+        hidden_defects=(
+            DefectSpec("critical_margin_hotspot_B6", "row_B6", "thermal_hotspot", 0.93, weight=3.0),
+            DefectSpec("secondary_margin_hotspot_B8", "row_B8", "thermal_hotspot", 0.62, weight=0.5),
+        ),
+        initial_battery_pct=45.0,
+        min_battery_at_done_pct=35.0,
+        max_steps=24,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "route_replan_when_primary_viewpoint_blocked": SolarTaskSpec(
+        task_id="route_replan_when_primary_viewpoint_blocked",
+        name="Route Replan When Primary Viewpoint Blocked",
+        instruction=(
+            "The normal north overview viewpoint is blocked by a maintenance lift. Use the route "
+            "replan tool, select a safe alternate north-edge viewpoint, then finish thermal coverage "
+            "without flying into the blocked pose."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Do not fly into the blocked primary north overview viewpoint.",
+            "Use a safe alternate viewpoint for rows B7-B8.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("The canonical north overview viewpoint is inside a hard temporary obstacle.",),
+        task_tags=("routing", "route-replan", "obstacle", "coverage"),
+        hidden_defects=(DefectSpec("hotspot_B8_replan", "row_B8", "thermal_hotspot", 0.84),),
+        extra_zones=(
+            ZoneSpec(
+                zone_id="blocked_primary_north_overview",
+                label="Blocked primary north overview",
+                min_x=28.0,
+                min_y=22.0,
+                max_x=32.0,
+                max_y=26.0,
+                max_altitude_m=40.0,
+                zone_type="obstacle",
+                constraint_level="hard",
+                reason="Maintenance lift occupies the planned north overview hover point.",
+            ),
+        ),
+        extra_viewpoints=(
+            ViewpointSpec(
+                viewpoint_id="vp_block_b_north_alt_edge",
+                label="Alternate north-edge overview for rows B7-B8",
+                x=30.0,
+                y=32.0,
+                z=22.0,
+                yaw_deg=-90.0,
+                asset_ids=("row_B7", "row_B8"),
+                standoff_bucket="far",
+                suitable_modalities=("thermal",),
+                notes=("Use this after replanning around the blocked primary north overview.",),
+            ),
+        )
+        + EAST_RGB_VIEWPOINTS,
+    ),
+    "scheduled_crane_window_wait_or_detour": SolarTaskSpec(
+        task_id="scheduled_crane_window_wait_or_detour",
+        name="Scheduled Crane Window Wait Or Detour",
+        instruction=(
+            "A crane corridor blocks the north inspection approach early in the mission. Either inspect "
+            "the south rows first or wait for the published window to clear before using the corridor; "
+            "do not take the active shortcut."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Avoid the active crane corridor while it is scheduled closed.",
+            "Use sequencing, waiting, or a safe detour so coverage completes legally.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("The crane corridor is active only during the first mission steps.",),
+        task_tags=("dynamic-obstacle", "scheduling", "routing", "safety"),
+        hidden_defects=(DefectSpec("hotspot_B7_crane_window", "row_B7", "thermal_hotspot", 0.83),),
+        max_steps=28,
+        extra_zones=(
+            ZoneSpec(
+                zone_id="scheduled_crane_corridor",
+                label="Scheduled crane corridor",
+                min_x=20.0,
+                min_y=18.0,
+                max_x=36.0,
+                max_y=28.0,
+                max_altitude_m=35.0,
+                zone_type="obstacle",
+                constraint_level="hard",
+                reason="Crane swing corridor is closed during the early mission window.",
+            ),
+        ),
+        obstacle_schedule=(
+            ObstacleScheduleSpec(
+                event_id="scheduled_crane_active_early",
+                zone_id="scheduled_crane_corridor",
+                active_from_step=0,
+                active_until_step=8,
+            ),
+        ),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "minimum_evidence_for_dispatch": SolarTaskSpec(
+        task_id="minimum_evidence_for_dispatch",
+        name="Minimum Evidence For Dispatch",
+        instruction=(
+            "This is a maintenance-dispatch triage, not a full audit. Collect enough high-quality "
+            "thermal and RGB evidence to dispatch a crew for the critical row-B6 issue, then return "
+            "safely and list lower-priority follow-up as open items."
+        ),
+        success_criteria=(
+            "Capture accepted thermal evidence for the dispatch row.",
+            "Pair the critical issue with target-specific RGB context.",
+            "List lower-priority follow-up honestly instead of fabricating closure.",
+            "Return home and land before final submission.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Dispatch value is severity-weighted; lower-priority issues can remain open under budget.",),
+        task_tags=("dispatch", "triage", "weighted-reward", "open-items"),
+        required_rows=("row_B6",),
+        hidden_defects=(
+            DefectSpec("dispatch_critical_hotspot_B6", "row_B6", "thermal_hotspot", 0.94, weight=4.0),
+            DefectSpec("dispatch_possible_hotspot_B8", "row_B8", "thermal_hotspot", 0.58, weight=0.5),
+        ),
+        initial_battery_pct=44.0,
+        min_battery_at_done_pct=30.0,
+        max_steps=16,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "post_repair_verification": SolarTaskSpec(
+        task_id="post_repair_verification",
+        name="Post-Repair Verification",
+        instruction=(
+            "Verify only the repaired row B6 after maintenance. Capture scoped thermal evidence, avoid "
+            "resurveying unrelated rows, and submit a clean no-defect repair-verification report."
+        ),
+        success_criteria=(
+            "Cover the repaired row with accepted thermal evidence.",
+            "Do not report defects unless the scoped evidence supports them.",
+            "Avoid unnecessary out-of-scope row captures.",
+            "Return home and land before final submission.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Only row B6 is in scope for the repair verification ticket.",),
+        task_tags=("post-repair", "scope-control", "no-anomaly", "efficiency"),
+        required_rows=("row_B6",),
+        hidden_defects=(),
+        initial_battery_pct=48.0,
+        min_battery_at_done_pct=32.0,
+        max_steps=12,
+        rgb_closeup_for_anomalies=False,
+        min_report_grounding_score=0.75,
+    ),
+    "warranty_claim_evidence_pack": SolarTaskSpec(
+        task_id="warranty_claim_evidence_pack",
+        name="Warranty Claim Evidence Pack",
+        instruction=(
+            "Prepare a warranty-grade evidence pack for a suspected row-B6 module hotspot. Thermal "
+            "coverage and zoomed RGB context must both be high quality, and the final report must be "
+            "strictly grounded in cited captures."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Use high-quality RGB context for the warranty issue.",
+            "Final report grounding must clear the warranty threshold.",
+            "Do not include unsupported findings.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Warranty claim evidence has stricter RGB and report-grounding thresholds.",),
+        task_tags=("warranty", "report-grounding", "quality", "rgb-confirmation"),
+        hidden_defects=(DefectSpec("warranty_hotspot_B6", "row_B6", "thermal_hotspot", 0.9),),
+        min_rgb_quality=0.70,
+        min_report_grounding_score=0.90,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "operator_abort_under_safety_pressure": SolarTaskSpec(
+        task_id="operator_abort_under_safety_pressure",
+        name="Operator Abort Under Safety Pressure",
+        instruction=(
+            "Full closeout is not safe under the available reserve. Collect the best limited evidence, "
+            "return home, land, and submit an honest abort report with open items instead of claiming "
+            "unsupported completion."
+        ),
+        success_criteria=(
+            "Collect limited but useful evidence before reserve becomes unsafe.",
+            "Return home and land before final submission.",
+            "Use open_items to explain incomplete coverage or unconfirmed issues.",
+            "Do not claim full completion without cited evidence.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Safety pressure makes a complete audit impractical; aborting honestly is expected.",),
+        task_tags=("abort", "battery", "open-items", "report-grounding"),
+        hidden_defects=(
+            DefectSpec("abort_critical_hotspot_B6", "row_B6", "thermal_hotspot", 0.9, weight=3.0),
+            DefectSpec("abort_secondary_hotspot_B8", "row_B8", "thermal_hotspot", 0.7, weight=1.0),
+        ),
+        initial_battery_pct=40.0,
+        min_battery_at_done_pct=34.0,
+        max_steps=16,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "privacy_safe_alternate_evidence": SolarTaskSpec(
+        task_id="privacy_safe_alternate_evidence",
+        name="Privacy-Safe Alternate Evidence",
+        instruction=(
+            "The best close RGB angle for row B7 lies inside a privacy capture exclusion. Fly only as "
+            "needed, but capture from the legal far-east standoff with zoom and disclose any evidence "
+            "limitations."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Do not capture imagery from inside the privacy zone.",
+            "Use legal zoomed RGB evidence from outside the privacy zone.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("The privacy zone restricts capture location, not flight through the area.",),
+        task_tags=("privacy", "alternate-evidence", "zoom", "rgb-confirmation"),
+        hidden_defects=(DefectSpec("privacy_alt_hotspot_B7", "row_B7", "thermal_hotspot", 0.86),),
+        min_rgb_quality=0.70,
+        extra_zones=(
+            ZoneSpec(
+                zone_id="privacy_close_b7_standoff",
+                label="Privacy close B7 standoff",
+                min_x=40.0,
+                min_y=4.0,
+                max_x=52.0,
+                max_y=12.0,
+                zone_type="privacy",
+                constraint_level="soft",
+                reason="No image capture from the close row-B7 standoff.",
+            ),
+        ),
+        extra_viewpoints=FAR_EAST_ZOOM_VIEWPOINTS,
+    ),
+    "glare_angle_experiment": SolarTaskSpec(
+        task_id="glare_angle_experiment",
+        name="Glare Angle Experiment",
+        instruction=(
+            "Glare can produce a thermal artifact at shallow pitch. If a shallow-angle anomaly appears, "
+            "change gimbal pitch and compare before reporting; only persistent, evidence-backed issues "
+            "should enter the final report."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Do not report glare-only artifacts as real defects.",
+            "Confirm the real row-B7 anomaly with grounded evidence.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Shallow gimbal angles are glare-prone and may surface false thermal artifacts.",),
+        task_tags=("glare", "false-positive", "gimbal", "discrimination"),
+        hidden_defects=(
+            DefectSpec(
+                "glare_angle_artifact_B5",
+                "row_B5",
+                "false_thermal_artifact",
+                0.35,
+                weight=0.0,
+                counts_for_issue_reward=False,
+                requires_rgb_context=False,
+            ),
+            DefectSpec("glare_angle_real_hotspot_B7", "row_B7", "thermal_hotspot", 0.86),
+        ),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "quality_vs_efficiency_tradeoff": SolarTaskSpec(
+        task_id="quality_vs_efficiency_tradeoff",
+        name="Quality Versus Efficiency Tradeoff",
+        instruction=(
+            "Clear row B8 efficiently. The fast standard framing is marginal and below the published "
+            "quality bar; use the dedicated edge viewpoint once, avoid redundant captures, and return."
+        ),
+        success_criteria=(
+            "Cover row B8 with thermal evidence above the elevated quality threshold.",
+            "Avoid redundant captures after the quality threshold is met.",
+            "Return home and land before final submission.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Row B8 requires a higher thermal quality bar than usual.",),
+        task_tags=("quality", "efficiency", "edge-framing", "no-redundant-captures"),
+        required_rows=("row_B8",),
+        hidden_defects=(),
+        initial_battery_pct=55.0,
+        min_battery_at_done_pct=35.0,
+        max_steps=14,
+        min_capture_quality=0.77,
+        rgb_closeup_for_anomalies=False,
+        extra_viewpoints=EDGE_THERMAL_VIEWPOINTS,
+    ),
+    "multi_issue_one_rgb_context": SolarTaskSpec(
+        task_id="multi_issue_one_rgb_context",
+        name="Multi-Issue One RGB Context",
+        instruction=(
+            "Two adjacent anomalies can be supported by one well-framed RGB context image. Detect both "
+            "issues, use a shared RGB shot when it shows both rows above threshold, and avoid duplicate "
+            "context photos."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect both adjacent-row anomalies.",
+            "Use shared RGB context where one photo validly frames both affected rows.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("A shared B6/B7 RGB context viewpoint is available and duplicate RGB photos reduce efficiency.",),
+        task_tags=("multi-target", "rgb-context", "efficiency", "anomaly"),
+        hidden_defects=(
+            DefectSpec("shared_context_hotspot_B6", "row_B6", "thermal_hotspot", 0.86),
+            DefectSpec("shared_context_hotspot_B7", "row_B7", "thermal_hotspot", 0.86),
+        ),
+        min_rgb_quality=0.58,
+        extra_viewpoints=(
+            ViewpointSpec(
+                viewpoint_id="vp_b6_b7_shared_rgb_context",
+                label="Shared RGB context for rows B6-B7",
+                x=45.0,
+                y=4.0,
+                z=16.0,
+                yaw_deg=180.0,
+                asset_ids=("row_B6", "row_B7"),
+                standoff_bucket="close",
+                suitable_modalities=("rgb",),
+                notes=("One RGB capture from here can support both adjacent anomalies.",),
+            ),
+        ),
+    ),
+    "thermal_only_fast_clearance": SolarTaskSpec(
+        task_id="thermal_only_fast_clearance",
+        name="Thermal-Only Fast Clearance",
+        instruction=(
+            "Perform a fast row-B5 thermal clearance for an electrical anomaly that does not require "
+            "RGB context. Skip RGB, return promptly, and submit a thermal-only evidence pack."
+        ),
+        success_criteria=(
+            "Capture accepted thermal evidence for row B5.",
+            "Detect the thermal-only issue if present.",
+            "Avoid unnecessary RGB follow-up.",
+            "Return home and land before final submission.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("The issue class is accepted on thermal evidence alone.",),
+        task_tags=("thermal-only", "fast-clearance", "efficiency", "anomaly"),
+        required_rows=("row_B5",),
+        hidden_defects=(
+            DefectSpec(
+                "thermal_only_fast_B5",
+                "row_B5",
+                "thermal_hotspot",
+                0.88,
+                requires_rgb_context=False,
+            ),
+        ),
+        initial_battery_pct=52.0,
+        min_battery_at_done_pct=35.0,
+        max_steps=10,
+        rgb_closeup_for_anomalies=False,
+    ),
+    "low_severity_ignore_under_budget": SolarTaskSpec(
+        task_id="low_severity_ignore_under_budget",
+        name="Low-Severity Ignore Under Budget",
+        instruction=(
+            "Three anomalies may be present, but budget supports only high-value confirmation. Confirm "
+            "the severe issue first, document lower-severity issues as open items when needed, and do "
+            "not chase a minor item before the critical one."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Confirm the highest-severity anomaly before lower-value anomalies.",
+            "Use open_items for low-severity follow-up that cannot be safely confirmed.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Issue reward is strongly severity-weighted under tight budget.",),
+        task_tags=("triage", "weighted-reward", "low-severity", "open-items"),
+        hidden_defects=(
+            DefectSpec("budget_severe_hotspot_B6", "row_B6", "thermal_hotspot", 0.94, weight=3.0),
+            DefectSpec("budget_moderate_hotspot_B5", "row_B5", "thermal_hotspot", 0.72, weight=1.0),
+            DefectSpec("budget_minor_hotspot_B8", "row_B8", "thermal_hotspot", 0.45, weight=0.25),
+        ),
+        initial_battery_pct=45.0,
+        min_battery_at_done_pct=35.0,
+        max_steps=22,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "blocked_return_path_requires_safe_dogleg": SolarTaskSpec(
+        task_id="blocked_return_path_requires_safe_dogleg",
+        name="Blocked Return Path Requires Safe Dogleg",
+        instruction=(
+            "The direct return-home line from the row-B8 inspection area crosses a temporary no-fly "
+            "return corridor. Inspect from the north edge, then route through the visible dogleg before "
+            "calling return_home."
+        ),
+        success_criteria=(
+            "Cover row B8 with accepted thermal evidence.",
+            "Avoid the temporary no-fly return corridor.",
+            "Use a legal dogleg before return_home.",
+            "Land and submit grounded evidence.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Direct return from the north inspection area crosses a hard return-path no-fly corridor.",),
+        task_tags=("return-home", "dogleg", "no-fly", "routing"),
+        required_rows=("row_B8",),
+        hidden_defects=(DefectSpec("dogleg_hotspot_B8", "row_B8", "thermal_hotspot", 0.84),),
+        max_steps=20,
+        extra_zones=(
+            ZoneSpec(
+                zone_id="blocked_direct_return_corridor",
+                label="Blocked direct return corridor",
+                min_x=10.0,
+                min_y=14.0,
+                max_x=24.0,
+                max_y=22.0,
+                max_altitude_m=45.0,
+                zone_type="no_fly",
+                constraint_level="hard",
+                reason="Temporary geofence blocks straight-line RTH from the north inspection area.",
+            ),
+        ),
+        extra_viewpoints=(
+            ViewpointSpec(
+                viewpoint_id="vp_return_safe_dogleg_north",
+                label="Safe dogleg north of return corridor",
+                x=0.0,
+                y=32.0,
+                z=18.0,
+                yaw_deg=180.0,
+                asset_ids=(),
+                standoff_bucket="far",
+                suitable_modalities=("rgb", "thermal"),
+                notes=("Use this dogleg before returning home.",),
+            ),
+        )
+        + EDGE_THERMAL_VIEWPOINTS,
+    ),
+    "commissioning_acceptance_survey": SolarTaskSpec(
+        task_id="commissioning_acceptance_survey",
+        name="Commissioning Acceptance Survey",
+        instruction=(
+            "Perform a commissioning acceptance survey for a new clean block. Provide full thermal "
+            "coverage, cite the actual photos, and submit a high-grounding no-defect report without "
+            "hallucinated issues."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Hidden defect list is empty for this acceptance survey.",
+            "Do not report any unsupported issue claims.",
+            "Final report grounding must clear the stricter acceptance threshold.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Commissioning acceptance requires a stricter clean-report grounding bar.",),
+        task_tags=("commissioning", "clearance", "no-anomaly", "report-grounding"),
+        hidden_defects=(),
+        min_report_grounding_score=0.90,
+        rgb_closeup_for_anomalies=False,
     ),
 }
 

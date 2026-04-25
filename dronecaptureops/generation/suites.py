@@ -232,9 +232,10 @@ SUITES: dict[str, ScenarioSuite] = {
     "solar_tasks": ScenarioSuite(
         name="solar_tasks",
         purpose=(
-            "Task-conditioned solar benchmark: 30 mechanically distinct inspection-director missions "
+            "Task-conditioned solar benchmark: 45 mechanically distinct inspection-director missions "
             "covering coverage baselines, anomaly confirmation, recapture loops, zoom, scope control, "
-            "privacy, routing, weighted triage, false positives, and grounded reporting."
+            "privacy, routing, dynamic obstacles, return-margin decisions, weighted triage, false "
+            "positives, and grounded reporting."
         ),
         episodes=make_task_episodes(
             task_specs=(
@@ -268,6 +269,21 @@ SUITES: dict[str, ScenarioSuite] = {
                 ("no_defect_with_glare_artifact", "false_positive_glare", 2428),
                 ("required_rows_subset_priority", "single_hotspot", 2429),
                 ("audit_grade_strict_grounding", "bypass_diode_fault", 2430),
+                ("return_margin_decision_point", "low_battery_tradeoff", 2431),
+                ("route_replan_when_primary_viewpoint_blocked", "blocked_corridor_replan", 2432),
+                ("scheduled_crane_window_wait_or_detour", "blocked_corridor_replan", 2433),
+                ("minimum_evidence_for_dispatch", "low_battery_tradeoff", 2434),
+                ("post_repair_verification", "single_hotspot", 2435),
+                ("warranty_claim_evidence_pack", "bypass_diode_fault", 2436),
+                ("operator_abort_under_safety_pressure", "low_battery_tradeoff", 2437),
+                ("privacy_safe_alternate_evidence", "false_positive_glare", 2438),
+                ("glare_angle_experiment", "false_positive_glare", 2439),
+                ("quality_vs_efficiency_tradeoff", "single_hotspot", 2440),
+                ("multi_issue_one_rgb_context", "bypass_diode_fault", 2441),
+                ("thermal_only_fast_clearance", "single_hotspot", 2442),
+                ("low_severity_ignore_under_budget", "low_battery_tradeoff", 2443),
+                ("blocked_return_path_requires_safe_dogleg", "blocked_corridor_replan", 2444),
+                ("commissioning_acceptance_survey", "single_hotspot", 2445),
             ),
             tags=("task", "benchmark"),
         ),

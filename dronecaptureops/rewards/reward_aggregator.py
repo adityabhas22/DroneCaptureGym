@@ -211,6 +211,15 @@ class RewardAggregator:
             and world.telemetry.battery.level_pct >= world.mission.min_battery_at_done_pct
         ):
             bonus += 0.030
+        if context.success and action_name == "estimate_return_margin":
+            reserve = context.result.get("reserve_after_return_pct")
+            if isinstance(reserve, int | float) and reserve <= world.mission.min_battery_at_done_pct + 5.0:
+                bonus += 0.010
+        if context.success and action_name == "request_route_replan":
+            blocked = context.result.get("blocked_zone_ids") or []
+            recommendations = context.result.get("recommended_viewpoints") or []
+            if blocked and recommendations:
+                bonus += 0.010
         inspected_photo_id = context.action.arguments.get("photo_id")
         if (
             context.success

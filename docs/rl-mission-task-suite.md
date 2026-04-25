@@ -32,9 +32,11 @@ The agent sees task instructions, public constraints, success criteria, map geom
 
 ## Implemented Task Benchmark
 
-The task catalog is intentionally kept to 30 mechanically distinct missions. A
-task should stay in the benchmark only when it changes the measurable simulator
-state, verifier expectations, reward tradeoff, or optimal policy.
+The task catalog is intentionally capped at 45 mechanically distinct solar
+missions. A task should stay in the benchmark only when it changes the
+measurable simulator state, verifier expectations, reward tradeoff, or optimal
+policy. After this point, benchmark growth should come from additional domains
+using the same high-level drone-agent API rather than more solar variants.
 
 Current task groups:
 
@@ -45,6 +47,10 @@ Current task groups:
 - Privacy and false positives: `privacy_zone_capture`, `soft_privacy_capture_positioning`, `true_false_anomaly_discrimination`, `no_defect_with_glare_artifact`, `partial_blocked_anomaly_honest_report`
 - Domain-specific anomaly physics: `pid_multi_row_pattern`, `bird_soiling_explanation`, `vegetation_edge_encroachment`
 - Reward/report strategy: `honest_partial_report_open_items`, `strict_severity_weighted_triage`, `prioritized_triage_under_constraint`, `audit_grade_strict_grounding`
+- Return and abort decisions: `return_margin_decision_point`, `operator_abort_under_safety_pressure`, `blocked_return_path_requires_safe_dogleg`
+- Dynamic routing and access windows: `route_replan_when_primary_viewpoint_blocked`, `scheduled_crane_window_wait_or_detour`
+- Dispatch, warranty, and repair workflows: `minimum_evidence_for_dispatch`, `post_repair_verification`, `warranty_claim_evidence_pack`
+- Evidence strategy refinements: `privacy_safe_alternate_evidence`, `glare_angle_experiment`, `quality_vs_efficiency_tradeoff`, `multi_issue_one_rgb_context`, `thermal_only_fast_clearance`, `low_severity_ignore_under_budget`, `commissioning_acceptance_survey`
 
 Removed low-value reskins are not part of the benchmark: `bad_weather_recapture`,
 `safety_constrained_route`, `sparse_evidence_trap`,
@@ -58,6 +64,8 @@ Removed low-value reskins are not part of the benchmark: `bad_weather_recapture`
 The task suite tightens several verifier paths:
 
 - thermal row coverage uses each task's `min_capture_quality`,
+- issue RGB verification uses each task's `min_rgb_quality`,
+- task-specific scheduled obstacle windows can activate/deactivate hard zones,
 - anomaly IDs and anomaly target rows become visible only after valid thermal sensing,
 - RGB anomaly pairs must show the same target row as the detected anomaly,
 - final reports are scored against real cited photo IDs,
@@ -105,10 +113,10 @@ Key files:
 
 The corrected implementation is complete end to end:
 
-- 30 task IDs are available.
+- 45 task IDs are available.
 - All tasks reset deterministically.
 - All tasks preserve OpenEnv action compatibility.
 - All tasks have visible mission instructions and success criteria.
 - Hidden defects remain internal until valid sensing.
 - The `solar_tasks` suite runs through the harness with random and scripted policies.
-- Tests cover task generation, hidden-state protection, exact anomaly/RGB pairing, partial-report rejection, privacy capture safety, task suite execution, and mechanical assertions for the corrected task catalog.
+- Tests cover task generation, hidden-state protection, exact anomaly/RGB pairing, partial-report rejection, privacy capture safety, task suite execution, return-margin triage, scheduled obstacles, route replanning, dogleg returns, strict RGB/report thresholds, shared evidence reuse, and mechanical assertions for the corrected task catalog.
