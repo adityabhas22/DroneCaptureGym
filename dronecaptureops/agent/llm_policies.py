@@ -118,7 +118,7 @@ class OpenAIChatPolicy(_LLMPolicyBase):
             raise SystemExit("OpenAIChatPolicy requires `pip install openai`.") from exc
         self._client = OpenAI(
             base_url=self.api_base_url or os.getenv("OPENAI_API_BASE_URL") or os.getenv("API_BASE_URL"),
-            api_key=self.api_key or os.getenv("OPENAI_API_KEY") or "missing",
+            api_key=self.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_KEY") or "missing",
         )
         self._tool_schemas = openai_tool_schemas(self.env._tools)  # noqa: SLF001
 

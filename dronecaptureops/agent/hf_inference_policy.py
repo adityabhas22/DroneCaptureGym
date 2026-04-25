@@ -106,12 +106,14 @@ class HFInferencePolicy(_LLMPolicyBase):
         api_key = (
             self.api_key
             or os.getenv("HF_TOKEN")
+            or os.getenv("HF_AUTH_TOKEN")
             or os.getenv("HUGGINGFACE_TOKEN")
             or os.getenv("HUGGING_FACE_HUB_TOKEN")
         )
         if not api_key:
             raise SystemExit(
-                "HFInferencePolicy needs an HF token. Set HF_TOKEN or pass api_key=...; "
+                "HFInferencePolicy needs an HF token. Set one of HF_TOKEN / "
+                "HF_AUTH_TOKEN / HUGGINGFACE_TOKEN, or pass api_key=...; "
                 "this is the same token huggingface-cli login uses."
             )
 
