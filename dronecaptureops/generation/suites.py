@@ -229,32 +229,47 @@ SUITES: dict[str, ScenarioSuite] = {
             SuiteEpisode("blocked_corridor_replan", 2301, split="demo", tags=("demo", "hard")),
         ),
     ),
-    "solar_tasks_v2": ScenarioSuite(
-        name="solar_tasks_v2",
+    "solar_tasks": ScenarioSuite(
+        name="solar_tasks",
         purpose=(
-            "Task-conditioned scenarios v2: 15 inspection-director missions covering string outages, "
-            "PID patterns, soiling explanations, vegetation shadows, true/false discrimination, "
-            "occlusion routing, triage under battery/step pressure, and audit-grade grounding."
+            "Task-conditioned solar benchmark: 30 mechanically distinct inspection-director missions "
+            "covering coverage baselines, anomaly confirmation, recapture loops, zoom, scope control, "
+            "privacy, routing, weighted triage, false positives, and grounded reporting."
         ),
         episodes=make_task_episodes(
             task_specs=(
-                ("string_outage_survey", "bypass_diode_fault", 2401),
-                ("pid_multi_row_pattern", "bypass_diode_fault", 2402),
-                ("cracked_glass_closeup", "bypass_diode_fault", 2403),
-                ("bird_soiling_explanation", "soiling_and_shadow", 2404),
-                ("vegetation_edge_encroachment", "soiling_and_shadow", 2405),
-                ("substation_adjacency_caution", "single_hotspot", 2406),
-                ("low_contrast_recapture", "single_hotspot", 2407),
-                ("true_false_anomaly_discrimination", "false_positive_glare", 2408),
-                ("permanent_occlusion_coverage", "blocked_corridor_replan", 2409),
-                ("prioritized_triage_under_constraint", "low_battery_tradeoff", 2410),
-                ("capture_efficiency_discipline", "single_hotspot", 2411),
-                ("boundary_aware_closeup", "bypass_diode_fault", 2412),
-                ("no_defect_with_glare_artifact", "false_positive_glare", 2413),
-                ("adaptive_battery_reserve", "low_battery_tradeoff", 2414),
-                ("audit_grade_strict_grounding", "bypass_diode_fault", 2415),
+                ("basic_thermal_survey", "single_hotspot", 2401),
+                ("anomaly_confirmation", "single_hotspot", 2402),
+                ("low_battery_inspection", "low_battery_tradeoff", 2403),
+                ("inspect_recapture_quality_loop", "single_hotspot", 2404),
+                ("compound_safety_corridor", "blocked_corridor_replan", 2405),
+                ("honest_partial_report_open_items", "low_battery_tradeoff", 2406),
+                ("multi_anomaly_triage", "bypass_diode_fault", 2407),
+                ("zoom_required_long_standoff", "bypass_diode_fault", 2408),
+                ("edge_row_quality_bar", "single_hotspot", 2409),
+                ("no_anomaly_clearance", "false_positive_glare", 2410),
+                ("obstacle_detour_inspection", "blocked_corridor_replan", 2411),
+                ("privacy_zone_capture", "false_positive_glare", 2412),
+                ("soft_privacy_capture_positioning", "false_positive_glare", 2413),
+                ("thermal_only_anomaly_skip_rgb", "single_hotspot", 2414),
+                ("multi_anomaly_routing_under_obstacle", "blocked_corridor_replan", 2415),
+                ("single_row_reinspection", "single_hotspot", 2416),
+                ("pid_multi_row_pattern", "bypass_diode_fault", 2417),
+                ("diode_fault_needs_close_thermal", "bypass_diode_fault", 2418),
+                ("bird_soiling_explanation", "soiling_and_shadow", 2419),
+                ("vegetation_edge_encroachment", "soiling_and_shadow", 2420),
+                ("substation_adjacency_caution", "single_hotspot", 2421),
+                ("strict_severity_weighted_triage", "low_battery_tradeoff", 2422),
+                ("true_false_anomaly_discrimination", "false_positive_glare", 2423),
+                ("permanent_occlusion_coverage", "blocked_corridor_replan", 2424),
+                ("prioritized_triage_under_constraint", "low_battery_tradeoff", 2425),
+                ("capture_efficiency_discipline", "single_hotspot", 2426),
+                ("partial_blocked_anomaly_honest_report", "false_positive_glare", 2427),
+                ("no_defect_with_glare_artifact", "false_positive_glare", 2428),
+                ("required_rows_subset_priority", "single_hotspot", 2429),
+                ("audit_grade_strict_grounding", "bypass_diode_fault", 2430),
             ),
-            tags=("task", "v2"),
+            tags=("task", "benchmark"),
         ),
     ),
 }

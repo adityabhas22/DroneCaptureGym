@@ -8,6 +8,7 @@ def test_scenario_suites_are_centralized_and_deterministic():
     assert suite.episodes[0].episode_id == "single_hotspot:2101"
     assert suite.families == ("single_hotspot", "false_positive_glare", "blocked_corridor_replan")
     assert any(item.name == "hard_eval" for item in list_suites())
+    assert any(item.name == "solar_tasks" for item in list_suites())
 
 
 def test_resolved_suite_episode_builds_matching_scenario_family():

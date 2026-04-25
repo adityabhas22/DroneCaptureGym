@@ -42,7 +42,7 @@ def row_y(obs: DroneObservation, row_id: str) -> float:
 def _bypass_corridor(env: DroneCaptureOpsEnvironment, task_id: str) -> None:
     """Fly to the safe northern corridor (y=38 if a task ships extra obstacles, else y=20)."""
 
-    if task_id in {"obstacle_detour_inspection", "safety_constrained_route"}:
+    if task_id in {"obstacle_detour_inspection", "compound_safety_corridor"}:
         step(env, act("fly_to_viewpoint", x=0, y=38, z=18, yaw_deg=0, speed_mps=5))
     else:
         step(env, act("fly_to_viewpoint", x=0, y=20, z=18, yaw_deg=0, speed_mps=5))
@@ -82,14 +82,18 @@ def solve_task(task_id: str, seed: int = 7) -> DroneObservation:
     obs = env.reset(seed=seed, task=task_id)
 
     # Tasks with a tight step budget skip the informational warm-up calls.
-    tight_step_budget = task_id in {"limited_steps_rapid_survey"}
+    tight_step_budget = task_id in {
+        "capture_efficiency_discipline",
+        "single_row_reinspection",
+        "thermal_only_anomaly_skip_rgb",
+    }
     if not tight_step_budget:
         obs = step(env, act("get_mission_checklist"))
     obs = step(env, act("takeoff", altitude_m=18))
     _bypass_corridor(env, task_id)
 
-    # Bad-weather task: take a degraded first capture, then recapture cleanly.
-    if task_id == "bad_weather_recapture":
+    # Quality-loop task: take a degraded first capture, inspect it, then recapture cleanly.
+    if task_id == "inspect_recapture_quality_loop":
         step(env, act("fly_to_viewpoint", x=30, y=24, z=22, yaw_deg=-90, speed_mps=5))
         step(env, act("set_camera_source", source="thermal"))
         step(env, act("set_gimbal", pitch_deg=-30, yaw_deg=0))  # bad pitch first
@@ -105,8 +109,8 @@ def solve_task(task_id: str, seed: int = 7) -> DroneObservation:
             if target_id is None:
                 continue
             obs = _capture_rgb_for_anomaly(env, target_id, row_y(obs, target_id), f"rgb confirmation {anomaly}")
-            # closeup_resolution_challenge needs higher resolution → take a closer zoom shot.
-            if task_id == "closeup_resolution_challenge":
+            # The long-standoff task needs zoom for RGB confirmation.
+            if task_id == "zoom_required_long_standoff":
                 step(env, act("set_zoom", zoom_level=2.0))
                 obs = _capture_rgb_for_anomaly(
                     env,
@@ -127,7 +131,7 @@ def solve_task(task_id: str, seed: int = 7) -> DroneObservation:
     use_south_corridor = pose.y < -6.0
     # Tasks that ship a north-side obstacle (crane corridor) need to detour
     # over the top (y=38) rather than the standard y=24 line.
-    far_north_required = task_id in {"obstacle_detour_inspection"}
+    far_north_required = task_id in {"obstacle_detour_inspection", "compound_safety_corridor"}
     if use_south_corridor:
         if abs(pose.y - (-24.0)) > 1.0:
             step(env, act("fly_to_viewpoint", x=30, y=-24, z=22, yaw_deg=90, speed_mps=5))
