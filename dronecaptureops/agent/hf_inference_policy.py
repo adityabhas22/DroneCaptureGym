@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from dronecaptureops.agent.llm_policies import _LLMPolicyBase, _message_to_dict
-from dronecaptureops.agent.parser import parse_action
+from dronecaptureops.agent.parser import parse_action_with_thinking
 from dronecaptureops.agent.policies import AgentContext
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
 from dronecaptureops.core.errors import ActionValidationError
@@ -65,6 +65,7 @@ class HFInferenceTurnRecord:
     retries: int
     parse_error: str | None
     raw_response: dict[str, Any]
+    thinking_content: str = ""
 
 
 @dataclass
@@ -83,7 +84,10 @@ class HFInferencePolicy(_LLMPolicyBase):
     model: str = "Qwen/Qwen3-14B-Instruct-2507"
     temperature: float = 0.4
     top_p: float = 0.9
-    max_tokens: int = 1024
+    # 8192 covers a Qwen3 base variant emitting ~5K tokens of <think> plus
+    # the actual tool call, including the 1K-token submit_evidence_pack tail.
+    # Drop to 1024 for non-reasoning variants if cost matters.
+    max_tokens: int = 8192
     api_base_url: str = HF_DEFAULT_BASE_URL
     api_key: str | None = None
     use_tool_calls: bool = True
@@ -160,11 +164,12 @@ class HFInferencePolicy(_LLMPolicyBase):
         self._messages.append(_message_to_dict(message))
 
         parse_error: str | None = None
+        thinking_content = ""
+        action: RawDroneAction | None = None
         try:
-            action = self._parse_response(message)
+            action, thinking_content = self._parse_response(message)
         except ActionValidationError as exc:
             parse_error = str(exc)
-            action = None  # type: ignore[assignment]
 
         if self.record_turns:
             tool_calls = getattr(message, "tool_calls", None) or []
@@ -193,11 +198,12 @@ class HFInferencePolicy(_LLMPolicyBase):
                     retries=retries,
                     parse_error=parse_error,
                     raw_response=_serialise_response(response),
+                    thinking_content=thinking_content,
                 )
             )
 
-        if parse_error:
-            raise ActionValidationError(parse_error)
+        if parse_error or action is None:
+            raise ActionValidationError(parse_error or "parse failed")
         return action
 
     # --- helpers -------------------------------------------------------------
@@ -249,8 +255,36 @@ class HFInferencePolicy(_LLMPolicyBase):
             return True
         return False
 
-    def _parse_response(self, message: Any) -> RawDroneAction:
+    def _parse_response(self, message: Any) -> tuple[RawDroneAction, str]:
+        """Return (action, thinking) extracted from a chat completion message.
+
+        Priority differs from the obvious "trust tool_calls first" because
+        provider-side tool-call extraction is the unreliable surface for
+        reasoning models (Qwen3, DeepSeek-R1). The provider may strip
+        `<think>` blocks inconsistently, leak whitespace into the
+        `arguments` JSON string, or leave tool_calls empty entirely with
+        the actual call inside `content`.
+
+        Strategy:
+          1. If `content` contains `<think>` or `<tool_call>` markers, parse
+             content — that's where the model put the truth and it's
+             markup we know how to handle.
+          2. Else if `tool_calls` is populated, use it (the cheap path for
+             non-reasoning models like Qwen3-Instruct-2507, GPT-4o, Sonnet).
+          3. Else parse `content` as a generic text response.
+
+        `thinking` is always populated when `<think>` blocks were stripped,
+        regardless of which surface succeeded. Empty string otherwise.
+        """
+
+        content = message.content or ""
         tool_calls = getattr(message, "tool_calls", None)
+
+        has_reasoning_markers = ("<think>" in content.lower()) or ("<tool_call>" in content.lower())
+
+        if has_reasoning_markers:
+            return parse_action_with_thinking(content)
+
         if tool_calls:
             payload = [
                 {
@@ -263,11 +297,11 @@ class HFInferencePolicy(_LLMPolicyBase):
                 }
                 for call in tool_calls
             ]
-            return parse_action(payload)
-        content = message.content or ""
+            return parse_action_with_thinking(payload)
+
         if not content.strip():
             raise ActionValidationError("model returned no tool_call and empty content")
-        return parse_action(content)
+        return parse_action_with_thinking(content)
 
 
 # ---------------------------------------------------------------------------

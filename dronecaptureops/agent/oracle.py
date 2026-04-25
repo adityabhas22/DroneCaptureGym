@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 from dronecaptureops.agent.policies import AgentContext, Policy, act
 from dronecaptureops.core.models import DroneObservation, RawDroneAction
-from dronecaptureops.tasks.solar_tasks import BlockGeometrySpec, get_solar_task
+from dronecaptureops.tasks.solar_tasks import get_solar_task
 
 
 @dataclass
@@ -52,18 +52,16 @@ class TaskOraclePolicy:
     _far_corridor: bool = field(default=False, init=False)
     _bad_weather: bool = field(default=False, init=False)
     _zoom_for_rgb: bool = field(default=False, init=False)
-    _extra_blocks: list[BlockGeometrySpec] = field(default_factory=list, init=False)
-
     def __post_init__(self) -> None:
         self._tight_steps = self.task_id in {"limited_steps_rapid_survey"}
         self._far_corridor = self.task_id in {"obstacle_detour_inspection", "safety_constrained_route"}
         self._bad_weather = self.task_id == "bad_weather_recapture"
         self._zoom_for_rgb = self.task_id == "closeup_resolution_challenge"
+        # Validate task_id resolves under the new task taxonomy.
         try:
-            spec = get_solar_task(self.task_id)
-            self._extra_blocks = list(spec.extra_blocks)
+            get_solar_task(self.task_id)
         except ValueError:
-            self._extra_blocks = []
+            pass
 
     # --- public Policy API ---------------------------------------------------
 
@@ -134,21 +132,6 @@ class TaskOraclePolicy:
         if not self._tight_steps:
             steps.append(_inspect_latest_thermal())
 
-        # Extra blocks: same north + south overview pattern at the block's
-        # x-offset. Path between blocks stays in the y=±24 corridor so it
-        # never crosses any substation NFZ.
-        for block in self._extra_blocks:
-            cx = block.center_x
-            steps.append(act("fly_to_viewpoint", x=cx, y=-24, z=22, yaw_deg=90, speed_mps=5))
-            steps.append(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
-            steps.append(act("capture_thermal", label=f"thermal overview {block.block_id} south"))
-            if not self._tight_steps:
-                steps.append(_inspect_latest_thermal())
-            steps.append(act("fly_to_viewpoint", x=cx, y=24, z=22, yaw_deg=-90, speed_mps=5))
-            steps.append(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
-            steps.append(act("capture_thermal", label=f"thermal overview {block.block_id} north"))
-            if not self._tight_steps:
-                steps.append(_inspect_latest_thermal())
         return steps
 
     def _anomaly_sequence(self, observation: DroneObservation) -> list[RawDroneAction]:

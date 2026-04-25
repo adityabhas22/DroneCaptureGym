@@ -45,7 +45,6 @@ class EpisodeTrace(BaseModel):
     steps: list[TraceStep]
     final_reward_breakdown: dict[str, Any]
     final_observation: dict[str, Any]
-    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
     def to_markdown(self) -> str:
         lines = [
@@ -57,26 +56,8 @@ class EpisodeTrace(BaseModel):
             f"- episode_id: `{self.episode_id}`",
             f"- final_reward: `{_fmt(self.final_reward_breakdown.get('total', 0.0))}`",
             "",
+            "## Initial Summary",
         ]
-        if self.diagnostics:
-            lines.append("## Why This Episode Scored What It Scored")
-            lines.append("")
-            for key in (
-                "submitted",
-                "accepted",
-                "captured_required_coverage",
-                "cited_required_coverage",
-                "cited_issue_capture",
-                "fake_photo_ids_cited",
-                "low_quality_cited_photo_ids",
-                "missing_cited_rows",
-                "integrity_warnings",
-                "submit_warnings",
-            ):
-                if key in self.diagnostics:
-                    lines.append(f"- {key}: `{_compact(self.diagnostics[key])}`")
-            lines.append("")
-        lines.append("## Initial Summary")
         for key, value in self.initial_summary.items():
             lines.append(f"- {key}: `{_compact(value)}`")
         for step in self.steps:
@@ -115,7 +96,6 @@ def trace_rollout(rollout: RolloutResult | dict[str, Any]) -> EpisodeTrace:
         steps=[_trace_step(step) for step in result.trajectory],
         final_reward_breakdown=result.reward_breakdown,
         final_observation=result.final_observation,
-        diagnostics=_final_report_diagnostics(result),
     )
 
 
@@ -129,10 +109,6 @@ def build_trace_artifacts(rollout: RolloutResult | dict[str, Any]) -> dict[str, 
         "evidence_log": _evidence_log(result),
         "route_log": _route_log(result),
         "inspection_report": _inspection_report(result),
-        "capture_table": _capture_table(result),
-        "reward_evolution": _reward_evolution(result),
-        "safety_timeline": _safety_timeline(result),
-        "final_report_diagnostics": _final_report_diagnostics(result),
         "trace": trace.model_dump(mode="json"),
         "trace_markdown": trace.to_markdown(),
     }
@@ -149,10 +125,6 @@ def write_trace_artifacts(rollout: RolloutResult | dict[str, Any], output_dir: s
         "evidence_log": out / "evidence_log.json",
         "route_log": out / "route_log.json",
         "inspection_report": out / "inspection_report.json",
-        "capture_table": out / "capture_table.json",
-        "reward_evolution": out / "reward_evolution.json",
-        "safety_timeline": out / "safety_timeline.json",
-        "final_report_diagnostics": out / "final_report_diagnostics.json",
         "trace": out / "trace.json",
         "trace_markdown": out / "trace.md",
     }
@@ -162,148 +134,6 @@ def write_trace_artifacts(rollout: RolloutResult | dict[str, Any], output_dir: s
         else:
             path.write_text(json.dumps(artifacts[key], indent=2, sort_keys=True), encoding="utf-8")
     return paths
-
-
-def _capture_table(result: RolloutResult) -> list[dict[str, Any]]:
-    """Compact per-photo summary for fast eyeballing of an episode's evidence."""
-
-    final = result.final_observation
-    captures = final.get("capture_log") or final.get("evidence_artifacts") or []
-    cited = _cited_photo_ids_from_observation(final)
-    rows = []
-    for capture in captures:
-        photo_id = capture.get("photo_id")
-        rows.append({
-            "photo_id": photo_id,
-            "sensor": capture.get("sensor"),
-            "label": capture.get("label"),
-            "targets_visible": capture.get("targets_visible") or [],
-            "per_target_quality": capture.get("per_target_quality") or {},
-            "quality_score": capture.get("quality_score"),
-            "detected_anomalies": capture.get("detected_anomalies") or [],
-            "occlusion_pct": capture.get("occlusion_pct"),
-            "cited_in_report": photo_id in cited,
-        })
-    return rows
-
-
-def _reward_evolution(result: RolloutResult) -> list[dict[str, Any]]:
-    """Per-step total + every numeric breakdown component."""
-
-    rows = []
-    for step in result.trajectory:
-        components = {
-            key: float(value)
-            for key, value in step.reward_breakdown.items()
-            if isinstance(value, int | float)
-        }
-        rows.append({
-            "step": step.step,
-            "tool_name": step.action.get("tool_name"),
-            "reward": step.reward,
-            "components": components,
-            "deltas": dict(step.reward_delta),
-        })
-    return rows
-
-
-def _safety_timeline(result: RolloutResult) -> list[dict[str, Any]]:
-    """One row per step where safety, integrity, or warnings change."""
-
-    rows = []
-    prior_violations: list[str] = []
-    prior_integrity_warnings: list[str] = []
-    for step in result.trajectory:
-        breakdown = step.reward_breakdown
-        debug = breakdown.get("debug") if isinstance(breakdown, dict) else None
-        integrity_warnings = (debug or {}).get("integrity_warnings") or []
-        observation = step.next_observation
-        violations = _safety_violations_from_observation(observation)
-        new_violations = [v for v in violations if v not in prior_violations]
-        new_integrity = [w for w in integrity_warnings if w not in prior_integrity_warnings]
-        if new_violations or new_integrity or step.warnings:
-            rows.append({
-                "step": step.step,
-                "tool_name": step.action.get("tool_name"),
-                "new_safety_violations": new_violations,
-                "new_integrity_warnings": new_integrity,
-                "step_warnings": list(step.warnings),
-                "safety_gate": breakdown.get("safety_gate") if isinstance(breakdown, dict) else None,
-                "integrity_gate": breakdown.get("integrity_gate") if isinstance(breakdown, dict) else None,
-            })
-        prior_violations = list(violations)
-        prior_integrity_warnings = list(integrity_warnings)
-    return rows
-
-
-def _final_report_diagnostics(result: RolloutResult) -> dict[str, Any]:
-    """Why the final report scored what it scored — missing rows, fake IDs, etc."""
-
-    final = result.final_observation
-    breakdown = final.get("reward_breakdown") or {}
-    debug = breakdown.get("debug") or {}
-    cited = _cited_photo_ids_from_observation(final)
-    captures = final.get("capture_log") or final.get("evidence_artifacts") or []
-    real_ids = {capture.get("photo_id") for capture in captures}
-    fake_ids = sorted(cited - real_ids)
-    cited_captures = [capture for capture in captures if capture.get("photo_id") in cited]
-    low_quality_cited = [
-        capture.get("photo_id")
-        for capture in cited_captures
-        if isinstance(capture.get("quality_score"), int | float)
-        and capture["quality_score"] < 0.55
-    ]
-    submit_steps = [
-        step for step in result.trajectory
-        if step.action.get("tool_name") == "submit_evidence_pack"
-    ]
-    submitted = bool(submit_steps)
-    last_action_result = submit_steps[-1].action_result if submit_steps else {}
-    return {
-        "submitted": submitted,
-        "accepted": last_action_result.get("accepted"),
-        "submit_warnings": last_action_result.get("warnings") or [],
-        "missing_cited_rows": debug.get("missing_cited_rows") or [],
-        "captured_required_coverage": debug.get("captured_required_coverage"),
-        "cited_required_coverage": debug.get("cited_required_coverage"),
-        "captured_issue_capture": debug.get("captured_issue_capture"),
-        "cited_issue_capture": debug.get("cited_issue_capture"),
-        "integrity_warnings": debug.get("integrity_warnings") or [],
-        "fake_photo_ids_cited": fake_ids,
-        "low_quality_cited_photo_ids": low_quality_cited,
-        "cited_photo_count": len(cited),
-        "useful_cited_photo_count": len(cited_captures) - len(low_quality_cited),
-        "safety_gate": breakdown.get("safety_gate"),
-        "integrity_gate": breakdown.get("integrity_gate"),
-        "raw_outcome_if_submitted": debug.get("raw_outcome_if_submitted"),
-    }
-
-
-def _cited_photo_ids_from_observation(observation: dict[str, Any]) -> set[str]:
-    """Pull cited photo IDs from a final observation's submit action_result, if any."""
-
-    cited: set[str] = set()
-    action_result = observation.get("action_result") or {}
-    report = action_result.get("evidence") or action_result.get("report") or {}
-    for key in ("photo_ids", "evidence_photo_ids"):
-        for value in (report.get(key) if isinstance(report, dict) else None) or []:
-            if isinstance(value, str):
-                cited.add(value)
-    # Capture log may carry a direct cited-flag if present.
-    for capture in observation.get("capture_log") or []:
-        if capture.get("cited") is True and isinstance(capture.get("photo_id"), str):
-            cited.add(capture["photo_id"])
-    return cited
-
-
-def _safety_violations_from_observation(observation: dict[str, Any]) -> list[str]:
-    """Extract safety violations from an observation's warnings/state_summary."""
-
-    violations: list[str] = []
-    for warning in observation.get("warnings") or []:
-        if isinstance(warning, str) and ("violation" in warning or "unsafe" in warning or "no_fly" in warning):
-            violations.append(warning)
-    return violations
 
 
 def _trace_step(step: RolloutStep) -> TraceStep:

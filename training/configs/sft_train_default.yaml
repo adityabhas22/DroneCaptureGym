@@ -28,11 +28,18 @@ model_name: Qwen/Qwen3-4B-Instruct-2507
 tokenizer_name: null      # null = use model_name's tokenizer
 
 # Train/val split — by seed within each task, then concatenated.
-val_seed_fraction: 0.15
+# 0.20 ≈ 3 val seeds per task at seeds_per_task=15; gives a stable val_loss
+# signal so early_stopping_patience has something to respond to.
+val_seed_fraction: 0.20
 
-# Sequence length cap. ~3000 tokens fits a 22-step trajectory comfortably.
-# Trajectories that overflow are filtered out (logged) rather than truncated.
-max_seq_length: 4096
+# Sequence length cap. SOLAR_TASKS oracle trajectories run 30-50 steps with
+# verbose observations; measured token distribution: median 14.5k, p95 16.4k.
+# 16384 keeps ~96% of records; 14 outliers are filtered. Lowering this
+# would silently drop most of the dataset.
+#
+# Memory cost: 16k seq × bf16 × Qwen3-4B + LoRA fits L40S (48GB) at
+# batch_size=2 only with gradient_checkpointing — see below.
+max_seq_length: 16384
 
 # Anti-overfit knobs.
 num_train_epochs: 3
@@ -41,15 +48,19 @@ lr_scheduler_type: cosine
 warmup_ratio: 0.05
 weight_decay: 0.01
 max_grad_norm: 1.0
-per_device_train_batch_size: 2
-per_device_eval_batch_size: 2
-gradient_accumulation_steps: 8
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 16    # effective batch 16 — same as before
+gradient_checkpointing: true       # required at 16k seq on L40S
 
 # Eval + early stopping.
+# eval_steps=10 gives 3-4 evals per epoch on a ~200-example dataset, so
+# early_stopping_patience=3 has enough signal to converge. eval_steps=25
+# would fire only once per run, defeating early stopping entirely.
 eval_strategy: steps
-eval_steps: 25
+eval_steps: 10
 save_strategy: steps
-save_steps: 25
+save_steps: 10
 load_best_model_at_end: true
 metric_for_best_model: eval_loss
 greater_is_better: false

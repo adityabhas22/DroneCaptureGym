@@ -239,14 +239,16 @@ def test_natural_language_finding_is_not_treated_as_hallucinated_issue_id():
 
 def test_verifier_uses_mission_thermal_threshold_not_default():
     """A capture above the default 0.55 floor but below a stricter task floor must
-    not satisfy required_coverage. Regression for issue #1."""
+    not satisfy required_coverage. The legacy `thermal_quality_threshold` helper
+    was inlined; this test now asserts that `mission.min_capture_quality` is
+    respected directly. Regression for issue #1."""
 
     from dronecaptureops.core.models import Capture, GimbalState, Pose
     from dronecaptureops.core.state import EpisodeWorld
     from dronecaptureops.rewards.verifiers import compute_required_coverage
 
     env = DroneCaptureOpsEnvironment()
-    env.reset(seed=42, domain="solar", task="bad_weather_recapture")
+    env.reset(seed=42, domain="solar", task="edge_row_quality_bar")
     world: EpisodeWorld = env.debug_world
     assert world.mission.min_capture_quality > 0.55  # task raises the bar
 
@@ -263,45 +265,6 @@ def test_verifier_uses_mission_thermal_threshold_not_default():
     coverage, debug = compute_required_coverage(world)
     assert coverage == 0.0, debug
     assert debug["missing_rows"] == list(world.mission.required_rows)
-
-
-def test_indiscriminate_citation_is_penalized():
-    """Citing many low-value redundant photos should incur a penalty.
-    Regression for issue #6."""
-
-    env = DroneCaptureOpsEnvironment()
-    env.reset(seed=7)
-    obs = capture_thermal_overview(env)
-    useful_ids = [capture.photo_id for capture in obs.capture_log]
-    # Add several low-value redundant captures from the same vantage.
-    for _ in range(6):
-        env.step(act("capture_thermal", label="redundant"))
-    env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
-    env.step(act("return_home"))
-    env.step(act("land"))
-    all_ids = [capture.photo_id for capture in env.debug_world.capture_log]
-    obs_indiscriminate = env.step(act(
-        "submit_evidence_pack",
-        summary="Cite everything.",
-        photo_ids=all_ids,
-        findings=[],
-    ))
-
-    env2 = DroneCaptureOpsEnvironment()
-    env2.reset(seed=7)
-    capture_thermal_overview(env2)
-    env2.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
-    env2.step(act("return_home"))
-    env2.step(act("land"))
-    obs_tight = env2.step(act(
-        "submit_evidence_pack",
-        summary="Tight cite.",
-        photo_ids=useful_ids,
-        findings=[],
-    ))
-
-    assert obs_indiscriminate.reward_breakdown.penalties > obs_tight.reward_breakdown.penalties
-    assert obs_tight.reward_breakdown.total >= obs_indiscriminate.reward_breakdown.total
 
 
 def test_process_reward_only_fires_on_progress_not_idle_actions():

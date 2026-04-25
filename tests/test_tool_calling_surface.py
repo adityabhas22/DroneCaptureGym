@@ -47,22 +47,27 @@ def test_asset_level_tools_drive_visible_inspection_workflow():
 
 
 def test_tool_catalog_exposes_typed_arg_schema():
-    """Issue #2: catalog includes type/range/choices for each argument."""
+    """The v2 tool catalog exposes required/optional argument names per tool.
+
+    The legacy ArgSpec (with type/range/choices) was removed when the v2
+    tool surface landed; per-arg type/range/choice validation now lives in
+    the individual handlers, not in the registry catalog. The catalog keeps
+    enough information for an agent to know which arguments to send.
+    """
 
     env = DroneCaptureOpsEnvironment()
     obs = env.reset(seed=7)
     catalog = {tool["name"]: tool for tool in obs.tool_catalog}
 
-    takeoff = catalog["takeoff"]["arg_schema"]
-    assert takeoff["altitude_m"]["type"] == "number"
-    assert takeoff["altitude_m"]["minimum"] == 0.0
-    assert takeoff["altitude_m"]["maximum"] == 120.0
+    takeoff = catalog["takeoff"]
+    assert "altitude_m" in takeoff["required_args"] or "altitude_m" in takeoff["optional_args"]
 
-    set_source = catalog["set_camera_source"]["arg_schema"]
-    assert set_source["source"]["choices"] == ["rgb", "thermal", "rgb_thermal"]
+    set_source = catalog["set_camera_source"]
+    assert "source" in set_source["required_args"] or "source" in set_source["optional_args"]
 
-    move = catalog["move_to_asset"]["arg_schema"]
-    assert move["standoff_bucket"]["choices"] == ["far", "mid", "close"]
+    move = catalog["move_to_asset"]
+    assert "asset_id" in move["required_args"]
+    assert "standoff_bucket" in move["required_args"] or "standoff_bucket" in move["optional_args"]
 
 
 def test_typed_validation_rejects_wrong_types_and_unknown_enums():
@@ -78,7 +83,7 @@ def test_typed_validation_rejects_wrong_types_and_unknown_enums():
     assert bad_enum.error and "source" in bad_enum.error
 
     bad_range = env.step(act("takeoff", altitude_m=500.0))
-    assert bad_range.error and "above maximum" in bad_range.error
+    assert bad_range.error and "unsafe_altitude" in bad_range.error
 
 
 def test_route_replan_exposes_visible_constraints_without_hidden_truth():

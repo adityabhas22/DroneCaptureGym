@@ -1,25 +1,33 @@
 """Parse model output into a typed RawDroneAction.
 
-Two formats are accepted:
+Several formats are accepted, in priority order when raw text is parsed:
 
-1. JSON text (returned as a chat completion's `content`):
+1. `<tool_call>{...}</tool_call>` XML wrapper (Qwen3, Hermes, Llama-3.1
+   tool-call native template).
+2. JSON text (returned as a chat completion's `content`):
    `{"tool": "fly_to_viewpoint", "args": {"x": 30, ...}}`
    `{"tool_name": "fly_to_viewpoint", "arguments": {...}}` (OpenAI-style)
-2. OpenAI/Anthropic tool_calls (a list of structured tool-call dicts):
+3. OpenAI/Anthropic tool_calls (a list of structured tool-call dicts):
    `[{"type": "function", "function": {"name": "x", "arguments": "{...}"}}]`
    `[{"type": "tool_use", "name": "x", "input": {...}}]`
 
+Reasoning-mode preprocessing: any `<think>...</think>` blocks are stripped
+before tool-call extraction. Their content is preserved on
+`parse_action_with_thinking`'s return value so audit logs can record what
+the model reasoned about.
+
 The parser recovers from common LLM quirks: code-fenced JSON, leading/
-trailing prose, unwrapped tool-call dicts, string-encoded `arguments`.
-Unrecoverable input becomes ActionValidationError so the env loop turns it
-into a structured "format invalid" turn instead of crashing.
+trailing prose, unwrapped tool-call dicts, string-encoded `arguments`,
+multiple JSON objects per response. Unrecoverable input becomes
+ActionValidationError so the env loop turns it into a structured "format
+invalid" turn instead of crashing.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 from dronecaptureops.core.errors import ActionValidationError
 from dronecaptureops.core.models import RawDroneAction
@@ -27,8 +35,23 @@ from dronecaptureops.core.models import RawDroneAction
 
 # Capture group 1 = code-fenced body if present, else the whole match.
 _CODE_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
-# Loose JSON object detector — picks the first {...} that parses.
-_JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
+# Reasoning-mode block (Qwen3 / DeepSeek-R1 / o1-style).
+_THINK_BLOCK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
+# Native tool-call wrapper used by Qwen3, Hermes, Llama-3.1 chat templates.
+_TOOL_CALL_BLOCK = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL | re.IGNORECASE)
+
+
+class ParsedAction(NamedTuple):
+    """Action plus the reasoning-block prose that preceded it (if any).
+
+    `thinking` is the joined text of every `<think>...</think>` block stripped
+    during parsing — empty string when the model didn't emit any. Audit logs
+    capture this so we can review the model's reasoning without re-parsing
+    the raw response.
+    """
+
+    action: RawDroneAction
+    thinking: str
 
 
 def parse_action(payload: Any) -> RawDroneAction:
@@ -38,15 +61,25 @@ def parse_action(payload: Any) -> RawDroneAction:
     - RawDroneAction (passthrough)
     - dict with `tool`/`tool_name` and `args`/`arguments`
     - list of OpenAI/Anthropic tool_call dicts (uses the first)
-    - str containing JSON or fenced JSON
+    - str containing JSON, fenced JSON, or `<tool_call>...</tool_call>`,
+      with optional `<think>...</think>` reasoning blocks anywhere
+    """
+
+    return parse_action_with_thinking(payload).action
+
+
+def parse_action_with_thinking(payload: Any) -> ParsedAction:
+    """Like `parse_action` but also returns any `<think>` content that was
+    stripped from the input. Useful for audit logging and reasoning-mode
+    SFT data. For non-string payloads `thinking` is always the empty string.
     """
 
     if isinstance(payload, RawDroneAction):
-        return payload
+        return ParsedAction(payload, "")
     if isinstance(payload, list):
-        return _parse_tool_calls(payload)
+        return ParsedAction(_parse_tool_calls(payload), "")
     if isinstance(payload, dict):
-        return _parse_dict(payload)
+        return ParsedAction(_parse_dict(payload), "")
     if isinstance(payload, str):
         return _parse_str(payload)
     raise ActionValidationError(
@@ -57,35 +90,106 @@ def parse_action(payload: Any) -> RawDroneAction:
 # --- format dispatch ---------------------------------------------------------
 
 
-def _parse_str(text: str) -> RawDroneAction:
-    """Pull the first JSON object out of a possibly-prosey completion string."""
+def _parse_str(text: str) -> ParsedAction:
+    """Pull the first tool call out of a possibly-prosey completion string.
 
-    cleaned = text.strip()
+    Pipeline (each stage tried in order; first success wins):
+      1. Strip every `<think>...</think>` block; keep joined content as `thinking`.
+      2. `<tool_call>{...}</tool_call>` XML wrapper (Qwen3 native format).
+      3. Direct JSON parse of the cleaned text.
+      4. Code-fenced JSON (` ```json ... ``` `).
+      5. First balanced `{...}` object scanned with brace depth (NOT a greedy
+         regex — that bug spanned `<think>` content into the tool-call JSON).
+    """
+
+    cleaned, thinking = _strip_think_blocks(text)
+    cleaned = cleaned.strip()
     if not cleaned:
-        raise ActionValidationError("empty model output")
+        raise ActionValidationError("model emitted reasoning but no tool call")
 
-    # Try direct parse first.
+    # 1. Native <tool_call> XML wrapper.
+    tool_call_match = _TOOL_CALL_BLOCK.search(cleaned)
+    if tool_call_match:
+        body = tool_call_match.group(1).strip()
+        parsed = _try_json(body)
+        if parsed is not None:
+            return ParsedAction(_parse_dict_or_call(parsed), thinking)
+
+    # 2. Direct JSON parse of cleaned text.
     parsed = _try_json(cleaned)
     if parsed is not None:
-        return _parse_dict_or_call(parsed)
+        return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
-    # Look for fenced JSON.
+    # 3. Fenced JSON.
     fence_match = _CODE_FENCE.search(cleaned)
     if fence_match:
         parsed = _try_json(fence_match.group(1))
         if parsed is not None:
-            return _parse_dict_or_call(parsed)
+            return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
-    # Last resort: find the first balanced {...} substring.
-    object_match = _JSON_OBJECT.search(cleaned)
-    if object_match:
-        parsed = _try_json(object_match.group(0))
+    # 4. First balanced {...} object — brace-depth scanner, not a greedy regex.
+    body = _first_json_object(cleaned)
+    if body is not None:
+        parsed = _try_json(body)
         if parsed is not None:
-            return _parse_dict_or_call(parsed)
+            return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
     raise ActionValidationError(
-        f"could not extract a JSON tool call from model output: {cleaned[:120]!r}"
+        f"could not extract a tool call from model output: {cleaned[:160]!r}"
     )
+
+
+def _strip_think_blocks(text: str) -> tuple[str, str]:
+    """Remove `<think>...</think>` segments and return (rest, joined_thinking).
+
+    Multiple think blocks are joined with newlines preserving order. Tag
+    matching is case-insensitive (some templates emit `<Think>`).
+    """
+
+    matches = _THINK_BLOCK.findall(text)
+    if not matches:
+        return text, ""
+    thinking = "\n".join(m.strip() for m in matches if m.strip())
+    rest = _THINK_BLOCK.sub("", text)
+    return rest, thinking
+
+
+def _first_json_object(text: str) -> str | None:
+    """Return the first complete `{...}` substring by scanning brace depth.
+
+    Skips braces inside JSON string literals so an unbalanced brace inside
+    a string doesn't confuse the depth counter. Returns None if no complete
+    object is found.
+    """
+
+    depth = 0
+    start = -1
+    in_string = False
+    escape = False
+    for i, ch in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    return text[start : i + 1]
+    return None
 
 
 def _parse_dict_or_call(value: Any) -> RawDroneAction:

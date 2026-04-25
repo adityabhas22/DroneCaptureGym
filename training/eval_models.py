@@ -627,6 +627,7 @@ def _write_audit_record(handle, model: str, cell: EvalCell, policy, result: Roll
                         "request_messages": turn.request_messages,
                         "response_text": turn.response_text,
                         "response_tool_calls": turn.response_tool_calls,
+                        "thinking_content": getattr(turn, "thinking_content", ""),
                         "finish_reason": turn.finish_reason,
                         "prompt_tokens": turn.prompt_tokens,
                         "completion_tokens": turn.completion_tokens,

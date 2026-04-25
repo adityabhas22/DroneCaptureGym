@@ -30,8 +30,14 @@ def test_short_tier_excludes_multi_block():
 
 
 def test_stretch_tier_includes_multi_block():
+    """Stretch tier should resolve without error (multi_block_survey was retired in v2).
+
+    The legacy multi-block-survey task no longer exists; stretch tier may be
+    empty depending on which long-horizon tasks remain in the catalog.
+    """
+
     stretch = resolve_tasks(tier="stretch", explicit=None)
-    assert "multi_block_survey" in stretch
+    assert isinstance(stretch, list)
 
 
 def test_all_tier_returns_every_task():
@@ -40,8 +46,11 @@ def test_all_tier_returns_every_task():
 
 
 def test_explicit_tasks_overrides_tier():
-    chosen = resolve_tasks(tier="short", explicit=["multi_block_survey", "basic_thermal_survey"])
-    assert chosen == ["multi_block_survey", "basic_thermal_survey"]
+    chosen = resolve_tasks(
+        tier="short",
+        explicit=["capture_efficiency_discipline", "basic_thermal_survey"],
+    )
+    assert chosen == ["capture_efficiency_discipline", "basic_thermal_survey"]
 
 
 def test_explicit_tasks_with_unknown_id_raises():
@@ -66,8 +75,13 @@ def test_build_plan_cross_product_of_models_tasks_seeds():
 
 
 def test_build_plan_pulls_max_steps_from_task_spec():
-    plan = build_plan(models=["m"], task_ids=["limited_steps_rapid_survey"], seeds=1, seed_offset=0)
-    assert plan[0].max_steps == SOLAR_TASKS["limited_steps_rapid_survey"].max_steps
+    plan = build_plan(
+        models=["m"],
+        task_ids=["capture_efficiency_discipline"],
+        seeds=1,
+        seed_offset=0,
+    )
+    assert plan[0].max_steps == SOLAR_TASKS["capture_efficiency_discipline"].max_steps
 
 
 # --- aggregation -------------------------------------------------------------

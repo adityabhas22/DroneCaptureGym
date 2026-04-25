@@ -26,7 +26,7 @@ def test_invalid_gimbal_is_blocked():
 
     obs = env.step(act("set_gimbal", pitch_deg=-120))
 
-    # Issue #2: typed registry validation now catches out-of-range arg before
-    # the handler even runs; the message names the tool, arg, and bound.
+    # The handler (or registry validation) rejects out-of-range gimbal pitch.
+    # The error code identifies the gimbal pitch violation explicitly.
     assert obs.error is not None
-    assert "set_gimbal" in obs.error and "pitch_deg" in obs.error
+    assert "invalid_gimbal_pitch" in obs.error or "gimbal" in obs.error

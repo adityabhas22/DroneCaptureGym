@@ -10,19 +10,7 @@ from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.utils.math_utils import clamp
 
 
-MIN_ROW_QUALITY = 0.55  # default fallback used only when no mission is available
-
-
-def thermal_quality_threshold(world: EpisodeWorld) -> float:
-    """Active thermal acceptance threshold for the current mission."""
-
-    return float(getattr(world.mission, "min_capture_quality", MIN_ROW_QUALITY) or MIN_ROW_QUALITY)
-
-
-def rgb_quality_threshold(world: EpisodeWorld) -> float:
-    """Active RGB acceptance threshold for the current mission."""
-
-    return float(getattr(world.mission, "min_rgb_quality", MIN_ROW_QUALITY) or MIN_ROW_QUALITY)
+MIN_ROW_QUALITY = 0.55
 
 
 def report_cited_photo_ids(report: EvidenceReport | None) -> set[str]:
@@ -104,6 +92,7 @@ def compute_capture_quality(world: EpisodeWorld, target_id: str, photo_id: str) 
 
 def compute_required_coverage(world: EpisodeWorld, *, cited_only: bool = False) -> tuple[float, dict[str, Any]]:
     required = list(world.mission.required_rows)
+    threshold = max(MIN_ROW_QUALITY, world.mission.min_capture_quality)
     if not required:
         return 1.0, {
             "targets_required": 0,
@@ -112,7 +101,6 @@ def compute_required_coverage(world: EpisodeWorld, *, cited_only: bool = False) 
             "missing_rows": [],
             "cited_only": cited_only,
         }
-    threshold = thermal_quality_threshold(world)
     covered = [
         row_id
         for row_id in required
@@ -155,7 +143,7 @@ def defect_captured(world: EpisodeWorld, defect: HiddenDefect, *, cited_only: bo
         return 1.0, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": True}
 
     rgb_context = []
-    rgb_threshold = max(rgb_quality_threshold(world), defect.min_quality - 0.10)
+    rgb_threshold = max(MIN_ROW_QUALITY, world.mission.min_rgb_quality, defect.min_quality - 0.10)
     for capture in world.capture_log:
         if capture.sensor != "rgb":
             continue
@@ -262,25 +250,26 @@ def compute_operational_efficiency(world: EpisodeWorld, evidence_success: float)
 
 
 def compute_photo_value(world: EpisodeWorld, capture: Capture) -> float:
-    thermal_threshold = thermal_quality_threshold(world)
     try:
         capture_index = next(index for index, item in enumerate(world.capture_log) if item.photo_id == capture.photo_id)
     except StopIteration:
         capture_index = len(world.capture_log)
     prior = world.capture_log[:capture_index]
+    thermal_threshold = max(MIN_ROW_QUALITY, world.mission.min_capture_quality)
     prior_covered = {
         target_id
         for item in prior
-        if item.sensor == "thermal" and item.quality_score >= thermal_threshold
+        if item.sensor == "thermal"
         for target_id in item.targets_visible
         if target_id in world.mission.required_rows
+        and item.target_quality(target_id) >= thermal_threshold
     }
     newly_covered = {
         target_id
         for target_id in capture.targets_visible
         if target_id in world.mission.required_rows
         and capture.sensor == "thermal"
-        and capture.quality_score >= thermal_threshold
+        and capture.target_quality(target_id) >= thermal_threshold
         and target_id not in prior_covered
     }
     new_target_credit = len(newly_covered) / max(len(world.mission.required_rows), 1)
@@ -364,6 +353,7 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
         return 1.0, []
     warnings: list[str] = []
     cap = 1.0
+    thermal_threshold = max(MIN_ROW_QUALITY, world.mission.min_capture_quality)
     real_ids = {capture.photo_id for capture in world.capture_log}
     cited = report_cited_photo_ids(report)
     fake = cited - real_ids
@@ -383,14 +373,14 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
                 cited_captures = [capture_by_id(world, photo_id) for photo_id in ids]
                 cited_captures = [capture for capture in cited_captures if capture is not None]
                 requirement_id = str(item.get("requirement_id", "")).lower()
-                thermal_threshold = thermal_quality_threshold(world)
                 if "thermal" in requirement_id:
                     cited_rows = {
                         row_id
                         for capture in cited_captures
-                        if capture.sensor == "thermal" and capture.quality_score >= thermal_threshold
+                        if capture.sensor == "thermal"
                         for row_id in capture.targets_visible
                         if row_id in world.mission.required_rows
+                        and capture.target_quality(row_id) >= thermal_threshold
                     }
                     if any(capture.sensor != "thermal" for capture in cited_captures):
                         warnings.append("thermal requirement cites wrong sensor type")
@@ -398,12 +388,10 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
                     if cited_captures and not set(world.mission.required_rows) <= cited_rows:
                         warnings.append("satisfied thermal requirement missing cited row coverage")
                         cap = min(cap, 0.40)
-                quality_floor = (
-                    rgb_quality_threshold(world)
-                    if "rgb" in requirement_id
-                    else thermal_threshold
-                )
-                if any(capture.quality_score < quality_floor for capture in cited_captures):
+                if any(
+                    not any(capture.target_quality(target_id) >= MIN_ROW_QUALITY for target_id in capture.targets_visible)
+                    for capture in cited_captures
+                ):
                     warnings.append("satisfied requirement cites low-quality image")
                     cap = min(cap, 0.60)
     known_defects = {defect.defect_id for defect in reportable_defects(world)}
@@ -465,5 +453,3 @@ def _ids_from(item: dict[str, Any], key: str) -> set[str]:
     if isinstance(value, list):
         return {photo_id for photo_id in value if isinstance(photo_id, str)}
     return set()
-
-

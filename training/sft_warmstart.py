@@ -89,6 +89,7 @@ class SFTTrainConfig(BaseModel):
     per_device_train_batch_size: int = 2
     per_device_eval_batch_size: int = 2
     gradient_accumulation_steps: int = 8
+    gradient_checkpointing: bool = False
 
     eval_strategy: str = "steps"
     eval_steps: int = 25
@@ -280,6 +281,7 @@ def train(config: SFTTrainConfig) -> None:
         per_device_train_batch_size=config.per_device_train_batch_size,
         per_device_eval_batch_size=config.per_device_eval_batch_size,
         gradient_accumulation_steps=config.gradient_accumulation_steps,
+        gradient_checkpointing=config.gradient_checkpointing,
         logging_steps=config.logging_steps,
         report_to=config.report_to or "none",
         seed=config.seed,

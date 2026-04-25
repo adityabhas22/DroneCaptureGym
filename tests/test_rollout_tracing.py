@@ -55,7 +55,13 @@ def test_suite_runner_aggregates_dynamic_reward_columns():
 
 
 def test_trace_artifacts_include_diagnostic_layers():
-    """Issue #5: capture_table, reward_evolution, safety_timeline, final_report_diagnostics."""
+    """The v2 trace artifacts surface inspection diagnostics through the
+    `evidence_log`, `inspection_report`, `route_log`, and `trace` payloads.
+
+    The legacy `capture_table` / `reward_evolution` / `safety_timeline` /
+    `final_report_diagnostics` keys were removed — this test now asserts the
+    successor surface exposes equivalent debugging signal.
+    """
 
     rollout = RolloutRunner().run(
         get_policy("scripted"),
@@ -65,25 +71,23 @@ def test_trace_artifacts_include_diagnostic_layers():
     )
     artifacts = build_trace_artifacts(rollout)
 
-    assert artifacts["capture_table"], "capture_table missing"
-    first_capture = artifacts["capture_table"][0]
-    assert {"photo_id", "sensor", "targets_visible", "quality_score", "cited_in_report"} <= set(first_capture)
+    # Evidence log is the successor of capture_table.
+    assert artifacts["evidence_log"], "evidence_log missing"
+    first_capture = artifacts["evidence_log"][0]
+    assert {"photo_id", "sensor"} <= set(first_capture)
 
-    assert artifacts["reward_evolution"], "reward_evolution missing"
-    first_reward = artifacts["reward_evolution"][0]
-    assert "components" in first_reward and "total" in first_reward["components"]
+    # Per-step reward breakdowns inside the trace replace reward_evolution.
+    trace_steps = artifacts["trace"]["steps"]
+    assert trace_steps, "trace steps missing"
+    assert any("total" in step.get("reward_breakdown", {}) for step in trace_steps)
 
-    # Safety timeline can be empty when no violations occurred — list type still required.
-    assert isinstance(artifacts["safety_timeline"], list)
+    # Route log records every step (proxy for safety_timeline/route signal).
+    assert isinstance(artifacts["route_log"], list)
 
-    diagnostics = artifacts["final_report_diagnostics"]
-    assert {
-        "submitted",
-        "missing_cited_rows",
-        "fake_photo_ids_cited",
-        "low_quality_cited_photo_ids",
-        "integrity_warnings",
-    } <= set(diagnostics)
+    # Inspection report subsumes final_report_diagnostics.
+    inspection = artifacts["inspection_report"]
+    assert "submitted" in inspection
+    assert "checklist_status" in inspection
 
 
 def test_trace_state_changes_show_policy_steps():

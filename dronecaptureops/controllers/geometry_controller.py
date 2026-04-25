@@ -17,10 +17,18 @@ class GeometryController(DroneController):
     """Controller implementation used for fast RL training."""
 
     def reset(self, world: EpisodeWorld) -> None:
+        # Preserve scenario-set fields (battery, weather band) that the
+        # builder may have overridden for a task-conditioned mission. The
+        # controller is responsible for putting the drone in a pre-takeoff
+        # pose, not for re-randomizing battery or weather.
+        scenario_battery = world.telemetry.battery.model_copy(deep=True)
+        scenario_weather_band = world.telemetry.weather_band
         world.telemetry = Telemetry(
             pose=world.home_pose.model_copy(deep=True),
             gimbal=GimbalState(),
-            battery_pct=100.0,
+            battery=scenario_battery,
+            battery_pct=scenario_battery.level_pct,
+            weather_band=scenario_weather_band,
             in_air=False,
             landed=True,
             mode="idle",
