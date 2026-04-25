@@ -202,8 +202,9 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
         obstacle_schedule_entries = _obstacle_schedule(family)
 
         # If a task_id is provided, overlay deterministic task spec on top of
-        # the base scenario. The base assets/home/standoff bands stay; defects,
-        # weather, battery, and zones are replaced/augmented from the spec.
+        # the base scenario. Keep the base assets/home/standoff bands, but do
+        # not inherit family-specific zones or obstacle schedules; benchmark
+        # tasks should carry only the operational constraints they declare.
         if task_id is not None:
             task = get_solar_task(task_id)
             mission = _mission_from_task(mission, task, weather)
@@ -213,6 +214,8 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
             telemetry.sync_legacy_fields()
             telemetry.battery.level_pct = task.initial_battery_pct
             telemetry.battery_pct = task.initial_battery_pct
+            airspace_zones = [zone for zone in airspace_zones if zone.zone_id == "substation_nfZ"]
+            obstacle_schedule_entries = []
             airspace_zones.extend(_airspace_zones_from_task(task))
             viewpoints.extend(_viewpoints_from_task(task))
             obstacle_schedule_entries.extend(_obstacle_schedule_from_task(task))

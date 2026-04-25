@@ -66,6 +66,7 @@ The task suite tightens several verifier paths:
 - thermal row coverage uses each task's `min_capture_quality`,
 - issue RGB verification uses each task's `min_rgb_quality`,
 - task-specific scheduled obstacle windows can activate/deactivate hard zones,
+- task-conditioned worlds include only task-declared zones/schedules plus the shared substation no-fly zone,
 - anomaly IDs and anomaly target rows become visible only after valid thermal sensing,
 - RGB anomaly pairs must show the same target row as the detected anomaly,
 - final reports are scored against real cited photo IDs,

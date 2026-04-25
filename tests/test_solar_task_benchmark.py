@@ -83,10 +83,12 @@ def test_task_battery_weather_and_zones_match_the_spec(task_id: str):
         assert env.debug_world.weather.wind_mps == pytest.approx(spec.weather_wind_mps)
     if spec.weather_visibility is not None:
         assert env.debug_world.weather.visibility == pytest.approx(spec.weather_visibility)
-    extra_zone_ids = {zone.zone_id for zone in spec.extra_zones}
-    if extra_zone_ids:
-        actual_zone_ids = {zone.zone_id for zone in env.debug_world.airspace_zones}
-        assert extra_zone_ids <= actual_zone_ids
+    expected_zone_ids = {"substation_nfZ"} | {zone.zone_id for zone in spec.extra_zones}
+    actual_zone_ids = {zone.zone_id for zone in env.debug_world.airspace_zones}
+    assert actual_zone_ids == expected_zone_ids
+    expected_schedule_ids = {entry.zone_id for entry in spec.obstacle_schedule}
+    actual_schedule_ids = {entry["zone_id"] for entry in env.debug_world.obstacle_schedule}
+    assert actual_schedule_ids == expected_schedule_ids
 
 
 @pytest.mark.parametrize("task_id", tuple(SOLAR_TASKS))
@@ -112,6 +114,62 @@ def test_solar_tasks_suite_has_one_episode_per_catalog_task():
     for ep in suite.episodes:
         assert ep.task_id
         assert ep.episode_id == f"task:{ep.task_id}:{ep.seed}"
+
+
+def test_solar_task_catalog_has_no_mechanical_duplicate_specs():
+    fingerprints: dict[tuple, str] = {}
+    for task_id, spec in SOLAR_TASKS.items():
+        fingerprint = (
+            spec.required_rows,
+            tuple(
+                (
+                    defect.target_id,
+                    defect.defect_type,
+                    defect.severity,
+                    defect.weight,
+                    defect.counts_for_issue_reward,
+                    defect.requires_rgb_context,
+                )
+                for defect in (spec.hidden_defects or ())
+            ),
+            spec.weather_wind_mps,
+            spec.weather_visibility,
+            spec.initial_battery_pct,
+            spec.min_battery_at_done_pct,
+            spec.max_steps,
+            spec.min_capture_quality,
+            spec.min_rgb_quality,
+            spec.min_report_grounding_score,
+            spec.thermal_overview_required,
+            spec.rgb_closeup_for_anomalies,
+            spec.must_return_home,
+            tuple(
+                (
+                    zone.min_x,
+                    zone.min_y,
+                    zone.max_x,
+                    zone.max_y,
+                    zone.zone_type,
+                    zone.constraint_level,
+                )
+                for zone in spec.extra_zones
+            ),
+            tuple(
+                (
+                    viewpoint.x,
+                    viewpoint.y,
+                    viewpoint.z,
+                    viewpoint.yaw_deg,
+                    viewpoint.asset_ids,
+                    viewpoint.standoff_bucket,
+                    viewpoint.suitable_modalities,
+                )
+                for viewpoint in spec.extra_viewpoints
+            ),
+            tuple((entry.zone_id, entry.active_from_step, entry.active_until_step) for entry in spec.obstacle_schedule),
+        )
+        assert fingerprint not in fingerprints, f"{task_id} duplicates {fingerprints.get(fingerprint)} mechanically"
+        fingerprints[fingerprint] = task_id
 
 
 def test_solar_tasks_suite_episodes_build_via_task_path():
