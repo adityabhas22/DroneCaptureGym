@@ -34,3 +34,7 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 ### Cron tick 3 (~30 min after submission) — KILLED, same RCA as Run 1
 - Status: cancelled.
 - Same vLLM V1 msgspec.ValidationError stalling rollouts. Same fix being applied.
+
+### Cron tick 4 (~30 min into v2) — cancelled, same vLLM scheduler bug
+- Status: cancelled (R1 hit same `max_num_batched_tokens` assertion; R2 was
+  about to). Fix landed in vllm_policy.py, resubmitting v3.

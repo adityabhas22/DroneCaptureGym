@@ -80,6 +80,14 @@ class VLLMEngine:
             model=model,
             dtype=dtype,
             max_model_len=max_model_len,
+            # Without this, vLLM defaults to a small max_num_batched_tokens
+            # (typically 2048 / 8192 depending on version) and the V0 scheduler
+            # asserts when a single prompt exceeds the limit:
+            #   `assert budget.num_batched_tokens <= max_num_batched_tokens`
+            # Setting it >= max_model_len guarantees any single full-length
+            # prompt fits in one batch, fixing rollout assertion crashes
+            # we hit at long-context PPO rollouts (32k).
+            max_num_batched_tokens=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,
             enforce_eager=enforce_eager,
             trust_remote_code=trust_remote_code,

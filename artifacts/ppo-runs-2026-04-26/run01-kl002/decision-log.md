@@ -47,3 +47,17 @@ to bracket the priority dial.
   - Belt+suspenders: set `VLLM_USE_V1=0` env in the job at submission via --env.
   - Also synced [ppo] pins with what SFT learned: peft<0.19, trl<1.2, transformers>=4.55.
 - Cost burned: ~30 min × $5/hr × 2 = ~$5. Both accounts: ~$57.50 each remaining.
+
+### Cron tick 4 (~30 min into v2) — KILLED, RCA #2
+- Status: ERROR (R1), cancelled R2 (was crashing same way).
+- vLLM V0 engine confirmed working (no msgspec errors). But:
+  - Innermost error: `vllm/core/scheduler.py:1268` →
+    `assert budget.num_batched_tokens <= max_num_batched_tokens`
+  - We never set `max_num_batched_tokens` on the LLM(); vLLM defaults small
+    (~2048) which is way under our 32k prompts. First long-prompt rollout
+    triggers the assertion → IndexError downstream → process dies.
+- Fix in dronecaptureops/agent/vllm_policy.py: explicitly pass
+  `max_num_batched_tokens=max_model_len` so any single prompt fits.
+- Cost burned this attempt: ~30 min × $5/hr × 2 = ~$5 (cumulative across
+  v1+v2 attempts: ~$10).
+- Resubmitting v3 with this fix.
