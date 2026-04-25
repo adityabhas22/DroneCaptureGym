@@ -243,3 +243,22 @@ def test_solar_task_catalog_round_trips_through_rollout_runner():
         # Episode should at least have submitted (done=True) and produced a
         # reward — completion depends on the task's specific thresholds.
         assert any(step.done for step in result.trajectory) or result.steps == 40
+
+
+def test_task_oracle_policy_completes_every_solar_task():
+    """The oracle is the SFT data source — it must succeed on every task."""
+
+    from dronecaptureops.agent import TaskOraclePolicy
+
+    runner = RolloutRunner()
+    failures = []
+    for task_id in SOLAR_TASKS:
+        result = runner.run(
+            TaskOraclePolicy(task_id=task_id),
+            seed=7,
+            task_id=task_id,
+            max_steps=40,
+        )
+        if not result.success or result.total_reward < 0.95:
+            failures.append((task_id, result.total_reward, result.success))
+    assert not failures, f"oracle failed on: {failures}"

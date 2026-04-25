@@ -28,6 +28,7 @@ from dronecaptureops.agent.messages import (
 )
 from dronecaptureops.agent.observation import render_initial_observation, render_observation
 from dronecaptureops.agent.parser import parse_action
+from dronecaptureops.agent.oracle import TaskOraclePolicy
 from dronecaptureops.agent.policies import (
     AgentContext,
     Policy,
@@ -72,6 +73,7 @@ __all__ = [
     "RolloutRunner",
     "RolloutStep",
     "ScriptedPolicy",
+    "TaskOraclePolicy",
     "act",
     "anthropic_tool_schemas",
     "build_assistant_message",

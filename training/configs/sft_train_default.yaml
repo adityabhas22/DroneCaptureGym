@@ -1,0 +1,78 @@
+# SFT trainer config — anti-overfit defaults.
+#
+# Tuning principles for warm-start (we want a model that learns the
+# tool-call format and rough strategy, NOT one that memorises the oracle):
+#   - LoRA constrains parameter updates so memorisation is hard.
+#   - Train/val split by SEED (not by example index) so within-task
+#     variation lands on the val side instead of leaking.
+#   - Low LR + cosine schedule limits how far the model drifts.
+#   - Early stopping on eval_loss prevents the late-epoch overfitting
+#     that ToolRL / ClaimsGym warned about.
+#   - Limited epochs (3 max). With ~120 examples this is enough.
+#
+# All values can be overridden by CLI flags in `training/sft_warmstart.py`.
+
+# Required: dataset path produced by `training/generate_sft_data.py`.
+dataset: artifacts/sft/sft-warmstart.jsonl
+output_dir: artifacts/sft-checkpoints
+
+# Base model. Defer the final pick — start with the smallest tool-call
+# capable model that still respects chat templates well. Qwen2.5-3B-Instruct
+# trains in <30 min on a single A100 with LoRA; bump to 7B once the
+# pipeline is proven.
+model_name: Qwen/Qwen2.5-3B-Instruct
+tokenizer_name: null      # null = use model_name's tokenizer
+
+# Train/val split — by seed within each task, then concatenated.
+val_seed_fraction: 0.15
+
+# Sequence length cap. ~3000 tokens fits a 22-step trajectory comfortably.
+# Trajectories that overflow are filtered out (logged) rather than truncated.
+max_seq_length: 4096
+
+# Anti-overfit knobs.
+num_train_epochs: 3
+learning_rate: 0.00002          # 2e-5
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+weight_decay: 0.01
+max_grad_norm: 1.0
+per_device_train_batch_size: 2
+per_device_eval_batch_size: 2
+gradient_accumulation_steps: 8
+
+# Eval + early stopping.
+eval_strategy: steps
+eval_steps: 25
+save_strategy: steps
+save_steps: 25
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+greater_is_better: false
+early_stopping_patience: 3      # stop if eval_loss stops improving for 3 evals
+
+# LoRA. Default to Qwen-friendly target modules.
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+# Loss masking — only train on assistant tokens. The Qwen2.5 chat template
+# emits `<|im_start|>assistant\n` markers that the trainer can use as the
+# response delimiter.
+assistant_only_loss: true
+response_template: "<|im_start|>assistant\n"
+
+# Logging
+logging_steps: 5
+report_to: []
+seed: 42

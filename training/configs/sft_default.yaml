@@ -1,0 +1,59 @@
+# SFT data generation config — default settings.
+#
+# Adding a new task to dronecaptureops/tasks/solar_tasks.SOLAR_TASKS
+# automatically pulls it into the dataset (via include_tasks: null below).
+# To exclude tasks or override per-task knobs, edit `tasks:` here.
+
+# Where to write the JSONL.
+output: artifacts/sft/sft-warmstart.jsonl
+
+# How many seeds to run per task. Each seed produces (potentially) one
+# example per policy listed below. Increase for more data, decrease for a
+# faster smoke build.
+seeds_per_task: 8
+
+# Per-rollout cap. Enough headroom for every task in the catalog including
+# `multi_anomaly_triage` and `closeup_resolution_challenge`.
+max_steps: 40
+
+# Policies that produce trajectories. The oracle is the canonical solver
+# and should always be present. Adding `weak_scripted` or `random` can
+# inject negative-example trajectories — leave them out for vanilla SFT.
+policies:
+  - name: task_oracle
+    weight: 1   # how many trajectories to emit per (task, seed) pair
+
+# Task selection.
+# - `include_tasks: null` ⇒ every task in SOLAR_TASKS is included.
+# - `include_tasks: [task_a, task_b]` ⇒ only those tasks.
+# - `exclude_tasks` always wins.
+include_tasks: null
+exclude_tasks: []
+
+# Per-task overrides. Optional, sparse, additive on top of the global
+# settings above. Only the keys you provide override the defaults.
+tasks: []
+# Example overrides:
+# tasks:
+#   - task_id: limited_steps_rapid_survey
+#     max_steps: 16
+#   - task_id: privacy_zone_capture
+#     seeds_per_task: 4   # fewer seeds — trajectory shape is repetitive
+#   - task_id: multi_anomaly_triage
+#     policies:
+#       - name: task_oracle
+#         weight: 2       # double sample this task
+
+# Data hygiene.
+require_success: true            # only keep complete=True trajectories
+deduplicate: true                # drop exact-duplicate trajectories
+use_tool_calls: false            # JSON-text format (broader model support)
+shuffle: true                    # shuffle output order so SFT epochs don't see tasks in blocks
+shuffle_seed: 1                  # reproducible shuffling
+
+# Held-out tasks (NEVER include in the training set even if they appear in
+# include_tasks). These match the recommended eval set.
+held_out_tasks:
+  - multi_anomaly_triage
+  - report_grounding_audit
+  - obstacle_detour_inspection
