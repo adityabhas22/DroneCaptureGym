@@ -61,3 +61,18 @@ to bracket the priority dial.
 - Cost burned this attempt: ~30 min × $5/hr × 2 = ~$5 (cumulative across
   v1+v2 attempts: ~$10).
 - Resubmitting v3 with this fix.
+
+### Cron tick 5 (v3 ERROR'd) — RCA #3
+- Both v3 runs ERROR'd during vLLM init.
+- Innermost error:
+  `RuntimeError: Unexpected error from cudaGetDeviceCount(). Error 802: system not yet initialized`
+- Stack: vllm.executor.uniproc_executor → init_device → torch.cuda.set_device → cuda_init → Error 802.
+- Root cause: vLLM 0.10.x's uniproc_executor init flow is incompatible with our setup
+  (PyTorch loads + initializes CUDA for the trainable model BEFORE vLLM tries to start
+  its inference worker). vLLM 0.11.2 (which we used in v2) handled this — its V0 engine
+  init worked cleanly.
+- Fix: bump pin BACK to `vllm>=0.11.0,<0.12.0`, keep VLLM_USE_V1=0 to avoid msgspec.
+- The max_num_batched_tokens=max_model_len fix from v3 STAYS — that addresses the V0
+  scheduler assertion v2 hit during rollouts.
+- Cumulative cost burned: ~$15. Budget remaining: ~$75 across 3 accounts.
+- Resubmitting v4 with vLLM 0.11.2 + V0 forced + max_num_batched_tokens fix.

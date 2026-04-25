@@ -38,3 +38,6 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 ### Cron tick 4 (~30 min into v2) — cancelled, same vLLM scheduler bug
 - Status: cancelled (R1 hit same `max_num_batched_tokens` assertion; R2 was
   about to). Fix landed in vllm_policy.py, resubmitting v3.
+
+### Cron tick 5 (v3 ERROR'd) — same CUDA init bug as Run 1
+- Resubmitting v4 with the version bump back to 0.11.x.

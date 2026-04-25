@@ -48,12 +48,12 @@ ppo = [
   "trl>=0.23.1,<1.2",
   "torch>=2.4",
   "transformers>=4.55",
-  # vLLM 0.11.x makes the V1 engine default. V1's msgspec serializer rejects
-  # our `LoRARequest` construction with `msgspec.ValidationError: Expected
-  # array, got int`, causing rollouts to silently hang at 0/16 completions.
-  # Pin to 0.10.x (V0 engine) which has stable LoRA hot-swap. Belt-and-
-  # suspenders: also set VLLM_USE_V1=0 in the job env via --env flag.
-  "vllm>=0.10.0,<0.11.0",
+  # vLLM 0.11.x makes the V1 engine default; V1's msgspec serializer rejects
+  # our LoRARequest format → rollouts hang at 0/16. Solution: KEEP 0.11.x
+  # (its V0 engine init works on H200) but force V0 via VLLM_USE_V1=0 env.
+  # Tried 0.10.x — its init hits CUDA Error 802 "system not yet initialized"
+  # on H200 after PyTorch already initialized CUDA. 0.11.2's init is robust.
+  "vllm>=0.11.0,<0.12.0",
   "wandb>=0.18",
 ]
 
