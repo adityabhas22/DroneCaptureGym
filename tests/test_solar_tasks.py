@@ -39,16 +39,28 @@ def safe_overview_capture(env: DroneCaptureOpsEnvironment):
     return obs
 
 
-def test_solar_task_catalog_has_fifteen_named_tasks():
-    assert len(SOLAR_TASKS) == 15
-    assert {
-        "basic_thermal_survey",
-        "anomaly_confirmation",
-        "low_battery_inspection",
-        "bad_weather_recapture",
-        "safety_constrained_route",
-        "sparse_evidence_trap",
-    } <= set(SOLAR_TASKS)
+_ORIGINAL_TASKS: tuple[str, ...] = (
+    "basic_thermal_survey",
+    "anomaly_confirmation",
+    "low_battery_inspection",
+    "bad_weather_recapture",
+    "safety_constrained_route",
+    "sparse_evidence_trap",
+    "multi_anomaly_triage",
+    "closeup_resolution_challenge",
+    "edge_row_focus",
+    "no_anomaly_clearance",
+    "obstacle_detour_inspection",
+    "privacy_zone_capture",
+    "return_home_compliance",
+    "limited_steps_rapid_survey",
+    "report_grounding_audit",
+)
+
+
+def test_solar_task_catalog_has_thirty_named_tasks():
+    assert len(SOLAR_TASKS) == 30
+    assert set(_ORIGINAL_TASKS) <= set(SOLAR_TASKS)
 
 
 def test_all_solar_tasks_reset_as_openenv_compatible_observations():
@@ -100,14 +112,22 @@ def test_task_observations_do_not_leak_hidden_defects_before_sensing():
             assert defect.defect_type not in state_json
 
 
-def test_scripted_rollout_completes_every_solar_task():
-    for task_id in SOLAR_TASKS:
+def test_scripted_rollout_completes_every_original_solar_task():
+    """The generic scripted solver is guaranteed to complete the v1 task catalog.
+
+    The v2 task catalog (`solar_tasks_v2`) intentionally introduces scenarios
+    that require task-aware planning (permanent occlusion, glare-only
+    artifacts, tight battery+steps); see `test_solar_tasks_v2.py` for
+    constructibility and behavior coverage of those tasks.
+    """
+
+    for task_id in _ORIGINAL_TASKS:
         obs = solve_task(task_id)
 
-        assert obs.done is True
-        assert obs.checklist_status.complete is True
-        assert obs.action_result["accepted"] is True
-        assert obs.reward > 0.75
+        assert obs.done is True, f"{task_id} did not finish"
+        assert obs.checklist_status.complete is True, f"{task_id} checklist incomplete"
+        assert obs.action_result["accepted"] is True, f"{task_id} report rejected"
+        assert obs.reward > 0.75, f"{task_id} reward {obs.reward:.3f} below 0.75"
 
 
 def test_anomaly_confirmation_requires_rgb_of_same_target_row():

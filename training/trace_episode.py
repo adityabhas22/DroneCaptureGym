@@ -24,6 +24,7 @@ def main() -> None:
         get_policy(args.policy),
         seed=episode.seed,
         scenario_family=episode.scenario_family,
+        task_id=episode.task_id or None,
         max_steps=episode.max_steps,
     )
     paths = write_trace_artifacts(rollout, args.output_dir)

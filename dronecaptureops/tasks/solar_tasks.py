@@ -9,12 +9,21 @@ from dronecaptureops.core.constants import DEFAULT_MAX_STEPS, DEFAULT_TASK
 
 @dataclass(frozen=True)
 class DefectSpec:
-    """Deterministic hidden defect for a solar task."""
+    """Deterministic hidden defect for a solar task.
+
+    Extra fields mirror `HiddenDefect` so a task can declare false-positive
+    or thermal-only defects (e.g. glare artifacts, no-RGB-needed soiling)
+    without the camera/verifier expecting RGB confirmation or counting them
+    as required issues.
+    """
 
     defect_id: str
     target_id: str
     defect_type: str
     severity: float
+    weight: float = 2.0
+    counts_for_issue_reward: bool = True
+    requires_rgb_context: bool = True
 
 
 @dataclass(frozen=True)
@@ -435,6 +444,377 @@ SOLAR_TASKS: dict[str, SolarTaskSpec] = {
         task_tags=("report-grounding", "audit", "anomaly"),
         hidden_defects=(DefectSpec("hotspot_B6", "row_B6", "thermal_hotspot", 0.9),),
         min_report_grounding_score=0.75,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "string_outage_survey": SolarTaskSpec(
+        task_id="string_outage_survey",
+        name="String Outage Survey",
+        instruction=(
+            "Survey rows B4-B8. A whole-row underperformance (string-level outage) is suspected on one "
+            "row. Capture full thermal coverage, then collect RGB context for the affected row and cite "
+            "both in the evidence pack."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect the string-level thermal anomaly.",
+            "Pair the anomaly with RGB context showing the same row.",
+        ),
+        public_constraints=BASE_CONSTRAINTS,
+        task_tags=("anomaly", "string-outage", "rgb-confirmation"),
+        hidden_defects=(DefectSpec("string_outage_B6", "row_B6", "thermal_hotspot", 0.86),),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "pid_multi_row_pattern": SolarTaskSpec(
+        task_id="pid_multi_row_pattern",
+        name="PID Multi-Row Pattern",
+        instruction=(
+            "Inspect rows B4-B8 with cleanly framed thermal evidence. Subtle PID-style degradation may "
+            "appear on multiple adjacent rows; capture each affected row and pair every detected anomaly "
+            "with target-specific RGB context before submitting."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect every adjacent-row PID anomaly.",
+            "Pair every detected anomaly with RGB context.",
+            "Thermal evidence must clear the elevated quality threshold.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Subtle anomalies require higher thermal quality.",),
+        task_tags=("anomaly", "pid", "multi-target", "quality"),
+        hidden_defects=(
+            DefectSpec("pid_B5", "row_B5", "thermal_hotspot", 0.55),
+            DefectSpec("pid_B6", "row_B6", "thermal_hotspot", 0.5),
+            DefectSpec("pid_B7", "row_B7", "thermal_hotspot", 0.6),
+        ),
+        min_capture_quality=0.62,
+        min_rgb_quality=0.6,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "cracked_glass_closeup": SolarTaskSpec(
+        task_id="cracked_glass_closeup",
+        name="Cracked Glass Close-Up",
+        instruction=(
+            "Inspect rows B4-B8. A suspected glass crack on one row needs both a thermal anomaly "
+            "frame and a high-resolution RGB close-up that shows the physical damage."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect the suspected anomaly on thermal.",
+            "Confirm the damage with a high-quality RGB close-up of the affected row.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Anomaly RGB evidence must clear an elevated quality bar.",),
+        task_tags=("anomaly", "rgb-confirmation", "closeup", "physical-damage"),
+        hidden_defects=(DefectSpec("cracked_glass_B5", "row_B5", "thermal_hotspot", 0.83),),
+        min_rgb_quality=0.72,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "bird_soiling_explanation": SolarTaskSpec(
+        task_id="bird_soiling_explanation",
+        name="Bird Soiling Explanation",
+        instruction=(
+            "Survey rows B4-B8. A localized warm spot is suspected to be caused by surface soiling "
+            "(droppings or dust). Capture thermal evidence and an RGB close-up that explains the "
+            "physical cause, then submit a grounded report."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect the soiling-related thermal anomaly.",
+            "Provide RGB evidence showing the physical cause.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Calm conditions are required for soiling detection.",),
+        task_tags=("anomaly", "soiling", "rgb-confirmation", "explanation"),
+        hidden_defects=(DefectSpec("soiling_B6", "row_B6", "soiling_heating", 0.55),),
+        weather_wind_mps=2.0,
+        weather_visibility=0.95,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "vegetation_edge_encroachment": SolarTaskSpec(
+        task_id="vegetation_edge_encroachment",
+        name="Vegetation Edge Encroachment",
+        instruction=(
+            "Inspect rows B4-B8 with attention to the edge rows. Vegetation may be encroaching on "
+            "an edge row and creating partial shading; capture an oblique-angle thermal that shows "
+            "the shadow and an RGB context shot for the same edge row."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Include edge rows B4 and B8 in accepted thermal evidence.",
+            "Detect the vegetation-shadow anomaly on the affected edge row.",
+            "Pair the anomaly with RGB context showing vegetation.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Vegetation shadows require an oblique gimbal angle, not pure overhead.",),
+        task_tags=("anomaly", "vegetation", "edge-framing", "rgb-confirmation"),
+        hidden_defects=(DefectSpec("veg_shadow_B8", "row_B8", "vegetation_shadow", 0.55),),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "substation_adjacency_caution": SolarTaskSpec(
+        task_id="substation_adjacency_caution",
+        name="Substation Adjacency Caution",
+        instruction=(
+            "A suspected hotspot is near the substation perimeter. Maintain safe standoff from the "
+            "substation no-fly zone and an additional safety buffer just outside it, then capture "
+            "thermal coverage and an RGB close-up of the affected row from a legal viewpoint."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Do not enter the substation no-fly zone or its safety buffer.",
+            "Capture the affected row from a legal close viewpoint.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + (
+            "An additional safety buffer extends north of the substation no-fly zone.",
+            "All hard zones must be respected by both flight path and viewpoint.",
+        ),
+        task_tags=("safety", "no-fly", "anomaly", "rgb-confirmation"),
+        hidden_defects=(DefectSpec("hotspot_B5_adj", "row_B5", "thermal_hotspot", 0.85),),
+        extra_zones=(
+            ZoneSpec(
+                zone_id="substation_safety_buffer_north",
+                label="Substation safety buffer (north)",
+                min_x=14.0,
+                min_y=6.0,
+                max_x=24.0,
+                max_y=12.0,
+                zone_type="no_fly",
+                constraint_level="hard",
+                reason="Safety buffer above substation no-fly zone.",
+            ),
+        ),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "low_contrast_recapture": SolarTaskSpec(
+        task_id="low_contrast_recapture",
+        name="Low Contrast Recapture",
+        instruction=(
+            "Inspect rows B4-B8 in low-contrast conditions (reduced visibility and elevated wind). "
+            "Use inspect_capture to evaluate quality and recapture any thermal frame that does not "
+            "clear the elevated quality bar before submitting evidence."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Recapture any low-quality thermal frame before submission.",
+            "Pair the detected anomaly with RGB context.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Reduced visibility lowers thermal contrast.", "Elevated wind reduces blur stability."),
+        task_tags=("weather", "quality", "recovery", "anomaly"),
+        hidden_defects=(DefectSpec("hotspot_B6_lc", "row_B6", "thermal_hotspot", 0.82),),
+        weather_wind_mps=5.0,
+        weather_visibility=0.78,
+        min_capture_quality=0.62,
+        min_rgb_quality=0.6,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "true_false_anomaly_discrimination": SolarTaskSpec(
+        task_id="true_false_anomaly_discrimination",
+        name="True/False Anomaly Discrimination",
+        instruction=(
+            "A real thermal anomaly is suspected on one row, but glare-induced false positives may "
+            "also appear from shallow gimbal angles. Use steep-pitch thermal coverage to confirm the "
+            "real anomaly with RGB context, and do not report any glare artifact as a real issue."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Detect and confirm the real thermal anomaly.",
+            "Do not include glare-only artifacts in the issues list.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Shallow gimbal angles increase glare risk and can produce false thermal artifacts.",),
+        task_tags=("anomaly", "false-positive", "discrimination", "report-grounding"),
+        hidden_defects=(
+            DefectSpec("hotspot_B6_real", "row_B6", "thermal_hotspot", 0.85),
+            DefectSpec(
+                "glare_artifact_B7_fp",
+                "row_B7",
+                "false_thermal_artifact",
+                0.4,
+                weight=0.0,
+                counts_for_issue_reward=False,
+                requires_rgb_context=False,
+            ),
+        ),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "permanent_occlusion_coverage": SolarTaskSpec(
+        task_id="permanent_occlusion_coverage",
+        name="Permanent Occlusion Coverage",
+        instruction=(
+            "A permanent maintenance vehicle blocks the north overview corridor for the entire mission. "
+            "Use the south overview viewpoint and any safe alternates to cover all rows B4-B8 and "
+            "capture the suspected anomaly without crossing the obstacle zone."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Cover every required row using the south overview viewpoint or a safe alternate.",
+            "Avoid the permanent maintenance vehicle obstacle zone.",
+            "Pair the detected anomaly with RGB context.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("The north overview corridor is permanently blocked by a maintenance vehicle.",),
+        task_tags=("safety", "obstacle", "coverage", "anomaly"),
+        hidden_defects=(DefectSpec("hotspot_B5_occ", "row_B5", "thermal_hotspot", 0.84),),
+        extra_zones=(
+            ZoneSpec(
+                zone_id="maintenance_vehicle_north",
+                label="Maintenance vehicle (north overview)",
+                min_x=22.0,
+                min_y=18.0,
+                max_x=38.0,
+                max_y=30.0,
+                max_altitude_m=40.0,
+                zone_type="obstacle",
+                constraint_level="hard",
+                reason="Maintenance vehicle blocks north overview corridor.",
+            ),
+        ),
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "prioritized_triage_under_constraint": SolarTaskSpec(
+        task_id="prioritized_triage_under_constraint",
+        name="Prioritized Triage Under Constraint",
+        instruction=(
+            "Two anomalies are suspected with different severities. Battery and step budget are tight, "
+            "so prioritize the high-severity anomaly with RGB confirmation and at least cover the "
+            "remaining rows on thermal before returning home."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Confirm the high-severity anomaly with RGB context.",
+            "Cover every required row on thermal even under the tight budget.",
+            "Finish with at least the stricter battery reserve.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Battery and step budgets are tight.",),
+        task_tags=("anomaly", "triage", "battery", "steps"),
+        hidden_defects=(
+            DefectSpec("severe_hotspot_B6", "row_B6", "thermal_hotspot", 0.92, weight=3.0),
+            DefectSpec("mild_hotspot_B8", "row_B8", "thermal_hotspot", 0.55, weight=1.0),
+        ),
+        initial_battery_pct=50.0,
+        min_battery_at_done_pct=30.0,
+        max_steps=24,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "capture_efficiency_discipline": SolarTaskSpec(
+        task_id="capture_efficiency_discipline",
+        name="Capture Efficiency Discipline",
+        instruction=(
+            "Complete a clean thermal coverage of rows B4-B8 with the minimum number of captures. "
+            "Avoid redundant captures: the same sensor framing the same rows twice is penalized."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Cover every required row with a minimal capture count.",
+            "Do not collect redundant captures of the same rows.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + (
+            "Step budget is tight.",
+            "Battery reserve is reduced.",
+            "Redundant duplicate captures are penalized.",
+        ),
+        task_tags=("efficiency", "steps", "battery", "no-redundant-captures"),
+        hidden_defects=(),
+        initial_battery_pct=55.0,
+        min_battery_at_done_pct=30.0,
+        max_steps=16,
+        rgb_closeup_for_anomalies=False,
+    ),
+    "boundary_aware_closeup": SolarTaskSpec(
+        task_id="boundary_aware_closeup",
+        name="Boundary-Aware Close-Up",
+        instruction=(
+            "A high-severity anomaly is suspected on a row close to the substation no-fly boundary. "
+            "Position carefully outside the no-fly zone, use zoom or a tight legal close standoff, and "
+            "capture both a thermal and an RGB close-up of the affected row."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Capture a high-quality close-up of the affected row from a legal viewpoint.",
+            "Do not enter the substation no-fly zone.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Anomaly RGB and thermal evidence must both clear an elevated quality bar.",),
+        task_tags=("anomaly", "no-fly", "closeup", "gimbal"),
+        hidden_defects=(DefectSpec("hotspot_B5_boundary", "row_B5", "thermal_hotspot", 0.88),),
+        min_capture_quality=0.62,
+        min_rgb_quality=0.7,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "no_defect_with_glare_artifact": SolarTaskSpec(
+        task_id="no_defect_with_glare_artifact",
+        name="No-Defect With Glare Artifact",
+        instruction=(
+            "Perform a clean clearance survey of rows B4-B8. Glare artifacts can appear at shallow "
+            "gimbal angles. Verify any anomaly carefully and do not report glare-only artifacts as "
+            "real issues."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Do not report glare-only artifacts as real issues.",
+            "Submit a concise no-anomaly evidence pack with full row coverage.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Shallow gimbal angles increase glare risk and can produce false thermal artifacts.",),
+        task_tags=("clearance", "no-anomaly", "false-positive", "report-grounding"),
+        hidden_defects=(
+            DefectSpec(
+                "glare_artifact_B6_fp",
+                "row_B6",
+                "false_thermal_artifact",
+                0.4,
+                weight=0.0,
+                counts_for_issue_reward=False,
+                requires_rgb_context=False,
+            ),
+        ),
+        rgb_closeup_for_anomalies=False,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "adaptive_battery_reserve": SolarTaskSpec(
+        task_id="adaptive_battery_reserve",
+        name="Adaptive Battery Reserve",
+        instruction=(
+            "Two anomalies are suspected on different rows. Battery is moderate and the reserve "
+            "requirement is stricter than usual. Choose dynamically whether to investigate both or "
+            "return early once coverage and battery margin are both safe."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Cover every required row on thermal.",
+            "Finish with at least the stricter battery reserve.",
+            "Do not violate the return-home requirement under battery pressure.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Stricter return-home battery reserve is required.",),
+        task_tags=("battery", "anomaly", "tradeoff", "return-home"),
+        hidden_defects=(
+            DefectSpec("hotspot_B6_easy", "row_B6", "thermal_hotspot", 0.86),
+            DefectSpec("hotspot_B4_edge", "row_B4", "thermal_hotspot", 0.78),
+        ),
+        initial_battery_pct=60.0,
+        min_battery_at_done_pct=35.0,
+        max_steps=28,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "audit_grade_strict_grounding": SolarTaskSpec(
+        task_id="audit_grade_strict_grounding",
+        name="Audit-Grade Strict Grounding",
+        instruction=(
+            "Produce an audit-grade evidence pack: cite separate thermal coverage photos and a "
+            "matching RGB close-up for each anomaly, and avoid any unsupported or duplicated claim. "
+            "The grounding bar is stricter than usual."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Cite the thermal overview and a matching RGB close-up for each anomaly.",
+            "Do not include unsupported or duplicate claims in the report.",
+            "Final grounding score must clear the stricter threshold.",
+        ),
+        public_constraints=BASE_CONSTRAINTS + ("Final report grounding threshold is stricter than usual.",),
+        task_tags=("report-grounding", "audit", "anomaly", "multi-target"),
+        hidden_defects=(
+            DefectSpec("hotspot_B5_audit", "row_B5", "thermal_hotspot", 0.86),
+            DefectSpec("hotspot_B7_audit", "row_B7", "thermal_hotspot", 0.88),
+        ),
+        min_report_grounding_score=0.85,
         extra_viewpoints=EAST_RGB_VIEWPOINTS,
     ),
 }

@@ -4,19 +4,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from dronecaptureops.tasks.solar_tasks import SOLAR_TASKS
+
 
 @dataclass(frozen=True)
 class SuiteEpisode:
-    """One deterministic scenario episode."""
+    """One deterministic scenario episode.
+
+    Two reset modes are supported (mirroring `env.reset` / `ScenarioGenerator.build`):
+
+    * Family-only: `task_id` is empty and the legacy randomized path is used.
+    * Task-conditioned: `task_id` is set and the deterministic mission spec
+      from `SOLAR_TASKS` overlays the base family scaffold (assets, modalities,
+      home/standoff bands). `scenario_family` is still required so the base
+      asset `required_modalities` and visibility tags are deterministic.
+    """
 
     scenario_family: str
     seed: int
     split: str = "train"
     tags: tuple[str, ...] = ()
     max_steps: int | None = None
+    task_id: str = ""
 
     @property
     def episode_id(self) -> str:
+        if self.task_id:
+            return f"task:{self.task_id}:{self.seed}"
         return f"{self.scenario_family}:{self.seed}"
 
 
@@ -118,6 +132,7 @@ def _with_max_steps(episode: SuiteEpisode, max_steps: int) -> SuiteEpisode:
         split=episode.split,
         tags=episode.tags,
         max_steps=max_steps,
+        task_id=episode.task_id,
     )
 
 
@@ -126,6 +141,45 @@ def _validate_families(families: tuple[str, ...]) -> None:
     if unknown:
         available = ", ".join(SOLAR_SCENARIO_FAMILIES)
         raise ValueError(f"unknown scenario families: {unknown}. available families: {available}")
+
+
+def _validate_task_ids(task_ids: tuple[str, ...]) -> None:
+    unknown = sorted(set(task_ids) - set(SOLAR_TASKS))
+    if unknown:
+        available = ", ".join(sorted(SOLAR_TASKS))
+        raise ValueError(f"unknown solar task ids: {unknown}. available task ids: {available}")
+
+
+def make_task_episodes(
+    *,
+    task_specs: tuple[tuple[str, str, int], ...],
+    split: str = "train",
+    tags: tuple[str, ...] = (),
+    max_steps: int | None = None,
+) -> tuple[SuiteEpisode, ...]:
+    """Create deterministic task-conditioned episodes.
+
+    Each entry is `(task_id, base_scenario_family, seed)`. The base family
+    seeds the asset modalities and default airspace; the task spec overlays
+    mission text, hidden defects, weather, battery, and any extra zones or
+    viewpoints. Seeds are kept deterministic per episode for reproducibility.
+    """
+
+    families = tuple(family for _, family, _ in task_specs)
+    task_ids = tuple(task_id for task_id, _, _ in task_specs)
+    _validate_families(families)
+    _validate_task_ids(task_ids)
+    return tuple(
+        SuiteEpisode(
+            scenario_family=family,
+            seed=seed,
+            split=split,
+            tags=tags,
+            max_steps=max_steps,
+            task_id=task_id,
+        )
+        for task_id, family, seed in task_specs
+    )
 
 
 SUITES: dict[str, ScenarioSuite] = {
@@ -173,6 +227,34 @@ SUITES: dict[str, ScenarioSuite] = {
             SuiteEpisode("single_hotspot", 2101, split="demo", tags=("demo", "easy")),
             SuiteEpisode("false_positive_glare", 2203, split="demo", tags=("demo", "medium")),
             SuiteEpisode("blocked_corridor_replan", 2301, split="demo", tags=("demo", "hard")),
+        ),
+    ),
+    "solar_tasks_v2": ScenarioSuite(
+        name="solar_tasks_v2",
+        purpose=(
+            "Task-conditioned scenarios v2: 15 inspection-director missions covering string outages, "
+            "PID patterns, soiling explanations, vegetation shadows, true/false discrimination, "
+            "occlusion routing, triage under battery/step pressure, and audit-grade grounding."
+        ),
+        episodes=make_task_episodes(
+            task_specs=(
+                ("string_outage_survey", "bypass_diode_fault", 2401),
+                ("pid_multi_row_pattern", "bypass_diode_fault", 2402),
+                ("cracked_glass_closeup", "bypass_diode_fault", 2403),
+                ("bird_soiling_explanation", "soiling_and_shadow", 2404),
+                ("vegetation_edge_encroachment", "soiling_and_shadow", 2405),
+                ("substation_adjacency_caution", "single_hotspot", 2406),
+                ("low_contrast_recapture", "single_hotspot", 2407),
+                ("true_false_anomaly_discrimination", "false_positive_glare", 2408),
+                ("permanent_occlusion_coverage", "blocked_corridor_replan", 2409),
+                ("prioritized_triage_under_constraint", "low_battery_tradeoff", 2410),
+                ("capture_efficiency_discipline", "single_hotspot", 2411),
+                ("boundary_aware_closeup", "bypass_diode_fault", 2412),
+                ("no_defect_with_glare_artifact", "false_positive_glare", 2413),
+                ("adaptive_battery_reserve", "low_battery_tradeoff", 2414),
+                ("audit_grade_strict_grounding", "bypass_diode_fault", 2415),
+            ),
+            tags=("task", "v2"),
         ),
     ),
 }

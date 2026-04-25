@@ -54,11 +54,18 @@ class RolloutRunner:
         *,
         seed: int | None = None,
         scenario_family: str | None = None,
+        task_id: str | None = None,
         max_steps: int | None = None,
     ) -> RolloutResult:
-        """Run a policy through one episode and capture every transition."""
+        """Run a policy through one episode and capture every transition.
 
-        observation = self.env.reset(seed=seed, scenario_family=scenario_family)
+        Pass `task_id` to use a deterministic task-conditioned mission spec
+        from `dronecaptureops.tasks.solar_tasks`. The base `scenario_family`
+        is still honored for asset modalities and visibility tags; the task
+        spec overlays mission text, hidden defects, weather, and zones.
+        """
+
+        observation = self.env.reset(seed=seed, scenario_family=scenario_family, task_id=task_id)
         initial = observation.model_dump(mode="json")
         limit = max_steps or int(observation.state_summary.get("remaining_steps") or 40)
         trajectory: list[RolloutStep] = []

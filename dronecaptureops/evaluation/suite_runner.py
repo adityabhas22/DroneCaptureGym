@@ -106,6 +106,7 @@ def run_suite(
             policy,
             seed=episode.seed,
             scenario_family=episode.scenario_family,
+            task_id=episode.task_id or None,
             max_steps=episode.max_steps,
         )
         rows.append(_row_from_rollout(resolved.name, episode, rollout, include_rollouts))

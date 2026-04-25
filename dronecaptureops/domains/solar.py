@@ -400,6 +400,9 @@ def _hidden_defects_from_task(task: SolarTaskSpec) -> list[HiddenDefect]:
                 defect_type=spec.defect_type,
                 severity=spec.severity,
                 min_quality=task.min_capture_quality,
+                weight=spec.weight,
+                counts_for_issue_reward=spec.counts_for_issue_reward,
+                requires_rgb_context=spec.requires_rgb_context,
             )
         )
     return defects
