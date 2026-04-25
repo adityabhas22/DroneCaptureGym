@@ -16,3 +16,11 @@
 Hypothesis: kl=0.02 keeps policy close to SFT, preserving tool-call format
 while still permitting strategic improvement. Pairs with run02 (kl=0.005)
 to bracket the priority dial.
+
+### Cron tick 1 (~13 min after submission)
+- Status: RUNNING. Bootstrap + pip + model load + vLLM init complete.
+- Critic warmup announced: "critic warmup: 50 steps".
+- Currently running rollouts for warmup (vLLM "Processed prompts" lines streaming).
+- vLLM emitted one msgspec.ValidationError traceback that engine recovered from — non-fatal.
+- No PPO step lines yet. Estimated first PPO step in ~15-20 min.
+- No decision needed.
