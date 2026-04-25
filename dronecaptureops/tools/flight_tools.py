@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from dronecaptureops.controllers.base import DroneController
+from dronecaptureops.core.errors import ActionValidationError
 from dronecaptureops.core.models import Pose
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.simulation.safety import SafetyChecker
@@ -45,3 +46,42 @@ class FlightTools:
 
     def land(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         return self._controller.land(world)
+
+    def move_to_asset(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        asset_id = args["asset_id"]
+        standoff_bucket = args.get("standoff_bucket", "mid")
+        asset = next((item for item in world.assets if item.asset_id == asset_id), None)
+        if asset is None:
+            raise ActionValidationError(f"unknown asset_id: {asset_id}")
+        viewpoint = next(
+            (
+                candidate
+                for candidate in world.viewpoints
+                if asset_id in candidate.asset_ids and candidate.standoff_bucket == standoff_bucket
+            ),
+            None,
+        )
+        if viewpoint is not None:
+            target = viewpoint.pose.model_copy(deep=True)
+            viewpoint_id = viewpoint.viewpoint_id
+        else:
+            band = next((item for item in asset.safe_standoff_bands if item.name == standoff_bucket), None)
+            standoff_m = band.preferred_m if band else 22.0
+            target = Pose(
+                x=asset.center_x,
+                y=asset.center_y + standoff_m,
+                z=18.0 if standoff_bucket == "far" else 12.0,
+                yaw_deg=-90.0,
+            )
+            viewpoint_id = None
+        speed = float(args.get("speed_mps", 5.0))
+        self._safety.validate_waypoint(world, target, speed)
+        result = self._controller.fly_to(world, target, speed)
+        result.update(
+            {
+                "asset_id": asset_id,
+                "standoff_bucket": standoff_bucket,
+                "viewpoint_id": viewpoint_id,
+            }
+        )
+        return result

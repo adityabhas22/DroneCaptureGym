@@ -27,6 +27,7 @@ class EpisodeWorld(BaseModel):
 
     episode_id: str
     domain: str
+    scenario_family: str = "baseline_hotspot"
     scenario_seed: int
     home_pose: Pose
     telemetry: Telemetry

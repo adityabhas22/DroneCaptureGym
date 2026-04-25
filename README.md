@@ -13,6 +13,7 @@ The benchmark focus is active visual inspection: deciding what evidence is missi
 - Safety wrapper before flight/gimbal actions.
 - Structured RGB/thermal capture-quality metadata.
 - DroneKit-inspired rich telemetry and generic inspection assets documented in [docs/environment-model-v2.md](docs/environment-model-v2.md).
+- Solar scenario families and tool-surface research notes in [docs/solar-scenario-research.md](docs/solar-scenario-research.md).
 - Composable reward breakdown with safety gate and report-grounding checks.
 - Fast pytest coverage for reset, step, safety, rewards, scenario generation, and hidden-state protection.
 - Placeholder `DroneKitSITLController` adapter boundary for future ArduPilot / DroneKit work.
@@ -56,6 +57,16 @@ python examples/run_scripted_agent.py
 python examples/run_random_agent.py
 ```
 
+## Run Suites and Trace Trajectories
+
+```bash
+python -m training.run_suite --suite smoke --policy scripted
+python -m training.run_suite --suite smoke --policy weak_scripted
+python -m training.trace_episode --suite demo --episode-index 0 --policy scripted --output-dir artifacts/trace-demo
+```
+
+Trace output includes `episode_steps.json`, `evidence_log.json`, `route_log.json`, `inspection_report.json`, `trace.json`, and `trace.md`. Each step records the action, next observation, reward breakdown, reward deltas, warnings, and visible state changes so training runs can be debugged trajectory by trajectory.
+
 ## OpenEnv Server
 
 ```bash
@@ -89,9 +100,9 @@ Actions are structured tool calls:
 
 Initial tools:
 
-- Mission/map: `get_site_map`, `get_mission_checklist`, `get_telemetry`, `estimate_view`
-- Flight: `takeoff`, `fly_to_viewpoint`, `hover`, `return_home`, `land`
-- Camera: `set_gimbal`, `set_zoom`, `capture_rgb`, `capture_thermal`, `inspect_capture`
+- Mission/map: `get_site_map`, `get_mission_checklist`, `get_telemetry`, `list_assets`, `estimate_view`, `estimate_return_margin`, `request_route_replan`
+- Flight: `takeoff`, `fly_to_viewpoint`, `move_to_asset`, `hover`, `return_home`, `land`
+- Camera: `set_gimbal`, `set_zoom`, `set_camera_source`, `point_camera_at`, `capture_rgb`, `capture_thermal`, `inspect_capture`
 - Evidence: `mark_target_inspected`, `submit_evidence_pack`
 
 ## Reward Shape

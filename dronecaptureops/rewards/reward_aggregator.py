@@ -15,6 +15,7 @@ from dronecaptureops.rewards.verifiers import (
     compute_integrity_gate,
     compute_issue_capture,
     compute_operational_efficiency,
+    compute_photo_value,
     compute_required_coverage,
     compute_safety_gate,
     compute_value_per_photo,
@@ -50,9 +51,15 @@ class RewardAggregator:
     ) -> RewardBreakdown:
         """Compute and store the current reward breakdown."""
 
-        required_coverage, coverage_debug = compute_required_coverage(world)
-        issue_capture, issue_debug = compute_issue_capture(world)
+        terminal_submitted = world.final_report is not None
+        captured_coverage, coverage_debug = compute_required_coverage(world)
+        captured_issue, issue_debug = compute_issue_capture(world)
+        cited_coverage, cited_coverage_debug = compute_required_coverage(world, cited_only=True)
+        cited_issue, cited_issue_debug = compute_issue_capture(world, cited_only=True)
+        required_coverage = cited_coverage if terminal_submitted else captured_coverage
+        issue_capture = cited_issue if terminal_submitted else captured_issue
         evidence_success = compute_evidence_success(world, required_coverage, issue_capture)
+        captured_evidence_success = compute_evidence_success(world, captured_coverage, captured_issue)
         operational_efficiency = compute_operational_efficiency(world, evidence_success)
         grounded_report = self._report.compute(world)
         capture_quality = self._quality.compute(world)
@@ -66,7 +73,7 @@ class RewardAggregator:
         process_reward = self._process_reward(world, context)
         penalties = self._penalties(world, format_valid)
 
-        raw_total = (
+        raw_outcome = (
             0.45 * evidence_success
             + 0.20 * required_coverage
             + 0.15 * issue_capture
@@ -75,17 +82,40 @@ class RewardAggregator:
             + process_reward
             - penalties
         )
-        capped_total = min(raw_total, safety_gate, integrity_gate)
+        raw_outcome_if_submitted = (
+            0.45 * captured_evidence_success
+            + 0.20 * captured_coverage
+            + 0.15 * captured_issue
+            + 0.10 * compute_operational_efficiency(world, captured_evidence_success)
+            + 0.10 * grounded_report
+            + process_reward
+            - penalties
+        )
+        shaping_reward = self._shaping_reward(captured_evidence_success, captured_coverage, captured_issue, process_reward, penalties)
+        if terminal_submitted:
+            capped_total = min(raw_outcome, safety_gate, integrity_gate)
+        else:
+            capped_total = shaping_reward
         debug = {
             **coverage_debug,
             **issue_debug,
+            "terminal_submitted": terminal_submitted,
+            "nonterminal_cap_applied": not terminal_submitted,
+            "shaping_reward": round(shaping_reward, 4),
+            "raw_outcome_if_submitted": round(raw_outcome_if_submitted, 4),
+            "captured_required_coverage": captured_coverage,
+            "captured_issue_capture": captured_issue,
+            "cited_required_coverage": cited_coverage,
+            "cited_issue_capture": cited_issue,
+            "missing_cited_rows": cited_coverage_debug["missing_rows"],
+            "cited_issue_details": cited_issue_debug["issue_details"],
             "photos_taken": len(world.capture_log),
             "valid_photos": len([capture for capture in world.capture_log if capture.targets_visible and capture.quality_score >= 0.55]),
             "battery_remaining": round(world.telemetry.battery.level_pct, 3),
             "distance_flown_m": round(world.distance_flown_m, 3),
             "elapsed_time_s": round(world.elapsed_time_s, 3),
             "integrity_warnings": integrity_warnings,
-            "raw_total_before_caps": round(raw_total, 4),
+            "raw_total_before_caps": round(raw_outcome, 4),
         }
         breakdown = RewardBreakdown(
             format_validity=1.0 if format_valid else 0.0,
@@ -142,37 +172,74 @@ class RewardAggregator:
         bonus = 0.0
         action_name = context.action.tool_name
         previous = context.previous_world
-        if context.format_valid:
-            bonus += 0.005
-        if context.success and action_name in {"takeoff", "fly_to_viewpoint", "return_home", "land"}:
-            bonus += 0.005
         if context.success and action_name in {"capture_thermal", "capture_rgb"} and len(world.capture_log) > len(previous.capture_log):
             capture = world.capture_log[-1]
-            if capture.targets_visible and capture.quality_score >= 0.55:
+            previous_coverage, _ = compute_required_coverage(previous)
+            current_coverage, _ = compute_required_coverage(world)
+            previous_issue, _ = compute_issue_capture(previous)
+            current_issue, _ = compute_issue_capture(world)
+            if current_coverage > previous_coverage:
                 bonus += 0.020
-            if capture.sensor == "thermal" and set(capture.targets_visible) & set(world.mission.required_rows):
+            if capture.sensor == "thermal" and current_coverage > previous_coverage:
                 bonus += 0.015
-            if capture.sensor == "rgb" and world.checklist_status.anomalies_detected:
+            if capture.sensor == "rgb" and current_issue > previous_issue:
                 bonus += 0.015
             previous_best = max(
                 [old.quality_score for old in previous.capture_log if set(old.targets_visible) & set(capture.targets_visible)] or [0.0]
             )
             if previous_best < 0.55 <= capture.quality_score:
                 bonus += 0.030
-        if context.success and action_name == "return_home" and world.telemetry.battery.level_pct >= world.mission.min_battery_at_done_pct:
+        if (
+            context.success
+            and action_name == "return_home"
+            and not previous.checklist_status.returned_home
+            and world.checklist_status.returned_home
+            and world.telemetry.battery.level_pct >= world.mission.min_battery_at_done_pct
+        ):
             bonus += 0.030
-        if context.success and action_name == "inspect_capture":
+        inspected_photo_id = context.action.arguments.get("photo_id")
+        if (
+            context.success
+            and action_name == "inspect_capture"
+            and inspected_photo_id in {capture.photo_id for capture in world.capture_log}
+            and inspected_photo_id not in previous.inspected_photo_ids
+        ):
             bonus += 0.010
         world.process_reward_total = round(min(0.10, world.process_reward_total + bonus), 4)
         return world.process_reward_total
+
+    def _shaping_reward(
+        self,
+        captured_evidence_success: float,
+        captured_coverage: float,
+        captured_issue: float,
+        process_reward: float,
+        penalties: float,
+    ) -> float:
+        shaping = (
+            0.10 * captured_evidence_success
+            + 0.04 * captured_coverage
+            + 0.04 * captured_issue
+            + process_reward
+            - penalties
+        )
+        return round(clamp(shaping, 0.0, 0.20), 4)
 
     def _penalties(self, world: EpisodeWorld, format_valid: bool) -> float:
         penalties = 0.0
         if not format_valid:
             penalties += 0.05
         penalties += 0.05 * max(world.invalid_action_count, 0)
-        redundant = max(0, len(world.capture_log) - len({tuple(capture.targets_visible) + (capture.sensor,) for capture in world.capture_log}))
-        penalties += 0.02 * redundant
+        low_value_redundant = sum(
+            1
+            for index, capture in enumerate(world.capture_log)
+            if compute_photo_value(world, capture) < 0.05
+            and any(
+                prior.sensor == capture.sensor and set(prior.targets_visible) == set(capture.targets_visible)
+                for prior in world.capture_log[:index]
+            )
+        )
+        penalties += 0.02 * low_value_redundant
         if world.done and world.mission.must_return_home and not world.checklist_status.returned_home:
             penalties += 0.20
         if world.final_report is not None and not world.final_report.photo_ids and not world.final_report.evidence and not world.final_report.issues_found:

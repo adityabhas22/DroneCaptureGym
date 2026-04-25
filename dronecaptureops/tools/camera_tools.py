@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from dronecaptureops.controllers.base import DroneController
-from dronecaptureops.core.models import SensorType
+from dronecaptureops.core.errors import ActionValidationError
+from dronecaptureops.core.models import Pose3D, SensorType
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.simulation.camera import estimate_visible_targets
 from dronecaptureops.simulation.safety import SafetyChecker
+from dronecaptureops.utils.math_utils import bearing_deg, distance_2d
 
 
 class CameraTools:
@@ -32,6 +35,37 @@ class CameraTools:
         world.telemetry.autopilot.command_status = "completed"
         world.telemetry.sync_legacy_fields()
         return world.telemetry.camera.model_dump(mode="json")
+
+    def set_camera_source(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        source = args["source"]
+        if source not in world.telemetry.camera.supported_sources:
+            raise ActionValidationError(f"unsupported camera source: {source}")
+        world.telemetry.camera.active_source = source
+        world.telemetry.autopilot.last_command = "set_camera_source"
+        world.telemetry.autopilot.command_status = "completed"
+        world.telemetry.sync_legacy_fields()
+        return world.telemetry.camera.model_dump(mode="json")
+
+    def point_camera_at(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        asset_id = args["asset_id"]
+        asset = next((item for item in world.assets if item.asset_id == asset_id), None)
+        if asset is None:
+            raise ActionValidationError(f"unknown asset_id: {asset_id}")
+        bearing = bearing_deg(world.telemetry.pose, asset.center_x, asset.center_y)
+        body_yaw = (bearing - world.telemetry.pose.yaw_deg + 180.0) % 360.0 - 180.0
+        distance_m = max(distance_2d(world.telemetry.pose, asset.center_x, asset.center_y), 0.1)
+        pitch = -min(85.0, max(25.0, math.degrees(math.atan2(world.telemetry.pose.z, distance_m))))
+        self._safety.validate_gimbal(pitch, body_yaw)
+        self._controller.set_gimbal(world, pitch, body_yaw)
+        world.telemetry.gimbal.frame_mode = "roi"
+        world.telemetry.gimbal.target_asset_id = asset_id
+        world.telemetry.gimbal.roi = Pose3D(
+            x=asset.center_x,
+            y=asset.center_y,
+            z=asset.center_z,
+            yaw_deg=asset.normal_yaw_deg,
+        )
+        return world.telemetry.gimbal.model_dump(mode="json")
 
     def capture_rgb(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         return self._capture(world, "rgb", args)
@@ -60,6 +94,7 @@ class CameraTools:
         return estimate.model_dump(mode="json") | {"quality_score": estimate.quality_score}
 
     def _capture(self, world: EpisodeWorld, sensor: SensorType, args: dict[str, Any]) -> dict[str, Any]:
+        world.telemetry.camera.active_source = sensor
         capture = self._controller.capture_image(world, sensor, args.get("label"))
         self._update_checklist_from_capture(world, capture)
         return capture.model_dump(mode="json") | {"quality_score": capture.quality_score}

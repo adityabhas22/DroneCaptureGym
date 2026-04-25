@@ -7,6 +7,8 @@ def test_solar_scenario_contains_required_rows_and_no_fly_zone():
     assert scenario.mission.required_rows == ["row_B4", "row_B5", "row_B6", "row_B7", "row_B8"]
     assert any(zone.zone_type == "no_fly" for zone in scenario.airspace_zones)
     assert scenario.hidden_defects
+    assert scenario.mission.scenario_family
+    assert scenario.weather.irradiance_wm2 >= 600
 
 
 def test_solar_scenario_populates_generic_assets_zones_and_viewpoints():

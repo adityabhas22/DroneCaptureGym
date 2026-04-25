@@ -4,7 +4,7 @@ This branch implements the Solar Farm Inspection reward specification on top of 
 
 ## What Changed
 
-The reward aggregator now follows the outcome-first formula from the specification:
+Terminal mission scoring now follows the outcome-first formula from the specification:
 
 ```text
 R_total =
@@ -40,6 +40,19 @@ New logged reward fields include:
 - `value_per_photo`
 - `debug`
 
+Before final report submission, the environment still emits learning signal, but that value is treated as capped shaping/progress rather than the actual mission score. The debug payload makes this explicit:
+
+```json
+{
+  "terminal_submitted": false,
+  "nonterminal_cap_applied": true,
+  "shaping_reward": 0.14,
+  "raw_outcome_if_submitted": 0.72
+}
+```
+
+After `submit_evidence_pack`, `total` is the terminal mission score after safety and integrity caps.
+
 ## Verifier Utilities
 
 The new `dronecaptureops.rewards.verifiers` module centralizes deterministic checks used by the reward system:
@@ -55,6 +68,8 @@ The new `dronecaptureops.rewards.verifiers` module centralizes deterministic che
 - integrity cap calculation
 - value per photo
 
+Verifier scoring now separates captured progress from cited terminal proof. Captured thermal coverage and issue visibility are useful during exploration, while terminal `evidence_success` is based on final report citations. A single valid cited thermal photo can satisfy multiple required rows, but every required row must be visible in at least one cited valid thermal photo.
+
 These checks use simulator state and capture metadata, not an LLM judge.
 
 ## Safety and Integrity Gates
@@ -69,6 +84,8 @@ The integrity gate caps rewards for evidence hallucination and report misuse, in
 - wrong sensor citations
 - low-quality evidence cited as definitive
 - unsupported issue claims
+- safety notes that contradict telemetry
+- structured `satisfied` claims that do not prove the stated requirement
 
 ## Evidence Reports
 
@@ -120,6 +137,10 @@ RGB anomaly follow-up is stricter now: an RGB capture only pairs with a detected
 
 Report grounding checks all cited photo IDs across both compatible and structured report fields. Thermal requirements must cite thermal evidence, and issue reports must cite real captured evidence.
 
+For defects that require RGB context, full terminal issue credit requires cited valid thermal defect evidence and cited valid RGB context evidence for the defect target. Thermal-only defect evidence still gives partial exploration credit, but it cannot become full terminal issue credit.
+
+Redundancy penalties are based on low marginal value rather than repeated targets alone. Useful recaptures, better-quality images, RGB context, issue confirmations, and cited evidence are not penalized simply because they overlap with earlier photos.
+
 ## Tests Added or Updated
 
 The reward tests now cover:
@@ -135,6 +156,11 @@ The reward tests now cover:
 - early submission scoring low
 - backward-compatible evidence reports
 - structured evidence reports
+- nonterminal shaping logs
+- process-reward farming resistance
+- cited terminal coverage
+- telemetry-contradicting safety notes
+- low-value versus useful redundancy
 
 Current verification:
 

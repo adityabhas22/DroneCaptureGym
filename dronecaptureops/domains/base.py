@@ -13,5 +13,5 @@ class DomainScenarioBuilder(ABC):
     domain: str
 
     @abstractmethod
-    def build(self, seed: int, episode_id: str | None = None) -> EpisodeWorld:
+    def build(self, seed: int, episode_id: str | None = None, scenario_family: str | None = None) -> EpisodeWorld:
         """Create an episode world for a seed."""

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from dronecaptureops.core.state import EpisodeWorld
+from dronecaptureops.utils.math_utils import distance_3d
 
 
 class InspectionTools:
@@ -21,6 +22,65 @@ class InspectionTools:
 
     def get_telemetry(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         return world.telemetry.model_dump(mode="json")
+
+    def list_assets(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        covered = set(world.checklist_status.thermal_rows_covered)
+        return {
+            "assets": [
+                {
+                    "asset_id": asset.asset_id,
+                    "asset_type": asset.asset_type,
+                    "label": asset.label,
+                    "required_modalities": asset.required_modalities,
+                    "pending_modalities": [] if asset.asset_id in covered else asset.required_modalities,
+                    "safe_standoff_bands": [band.model_dump(mode="json") for band in asset.safe_standoff_bands],
+                    "visibility_tags": asset.visibility_tags,
+                    "public_notes": asset.public_notes,
+                }
+                for asset in world.assets
+            ],
+            "pending_asset_ids": [
+                asset.asset_id for asset in world.assets if asset.asset_id not in covered
+            ],
+        }
+
+    def estimate_return_margin(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        current = world.telemetry.pose
+        home = world.home_pose.model_copy(deep=True)
+        home.z = max(current.z, 10.0)
+        distance_m = distance_3d(current, home)
+        estimated_battery_needed_pct = round(distance_m * 0.045 + 0.4, 3)
+        reserve_after_return_pct = round(world.telemetry.battery.level_pct - estimated_battery_needed_pct, 3)
+        return {
+            "distance_home_m": round(distance_m, 3),
+            "estimated_battery_needed_pct": estimated_battery_needed_pct,
+            "reserve_after_return_pct": reserve_after_return_pct,
+            "meets_required_reserve": reserve_after_return_pct >= world.mission.min_battery_at_done_pct,
+        }
+
+    def request_route_replan(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
+        reason = args["reason"]
+        blocked_zones = [
+            zone.zone_id
+            for zone in world.airspace_zones
+            if zone.zone_type in {"no_fly", "obstacle"} and zone.constraint_level == "hard"
+        ]
+        recommendations = [
+            {
+                "viewpoint_id": viewpoint.viewpoint_id,
+                "label": viewpoint.label,
+                "asset_ids": viewpoint.asset_ids,
+                "standoff_bucket": viewpoint.standoff_bucket,
+                "suitable_modalities": viewpoint.suitable_modalities,
+            }
+            for viewpoint in world.viewpoints
+        ]
+        return {
+            "reason": reason,
+            "blocked_zone_ids": blocked_zones,
+            "recommended_viewpoints": recommendations,
+            "message": "Use named viewpoints that avoid hard no-fly or obstacle zones.",
+        }
 
     def mark_target_inspected(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         target_id = args["target_id"]

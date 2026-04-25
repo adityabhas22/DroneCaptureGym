@@ -16,6 +16,7 @@ AirspaceZoneType = Literal["no_fly", "privacy", "obstacle"]
 ConstraintLevel = Literal["soft", "hard"]
 GimbalFrameMode = Literal["body", "earth", "roi"]
 CameraSource = Literal["rgb", "thermal", "rgb_thermal"]
+ScenarioDifficulty = Literal["easy", "medium", "hard"]
 
 
 class Pose3D(BaseModel):
@@ -149,7 +150,7 @@ class Telemetry(BaseModel):
 
         self.mode = self.autopilot.mode
         self.battery_pct = self.battery.level_pct
-        self.landed = self.autopilot.mode == "landed"
+        self.landed = self.autopilot.mode in {"idle", "landed"} and self.pose.z <= 0.0
         self.in_air = self.autopilot.armed and not self.landed
         self.attitude.yaw_deg = self.pose.yaw_deg
         self.rangefinder.distance_m = self.pose.z if self.pose.z > 0 else None
@@ -285,6 +286,7 @@ class HiddenDefect(BaseModel):
     max_occlusion: float = 0.20
     max_view_angle_deg: float = 55.0
     weight: float = 2.0
+    counts_for_issue_reward: bool = True
 
 
 class WeatherState(BaseModel):
@@ -292,6 +294,9 @@ class WeatherState(BaseModel):
 
     wind_mps: float = 2.0
     visibility: float = Field(default=1.0, ge=0.0, le=1.0)
+    irradiance_wm2: float = 760.0
+    cloud_cover_oktas: int = Field(default=1, ge=0, le=8)
+    ambient_temp_c: float = 28.0
 
     @property
     def wind_band(self) -> Literal["low", "mid", "high"]:
@@ -312,6 +317,9 @@ class MissionChecklist(BaseModel):
     rgb_closeup_for_anomalies: bool = True
     must_return_home: bool = True
     min_battery_at_done_pct: float = 20.0
+    scenario_family: str = "baseline_hotspot"
+    difficulty: ScenarioDifficulty = "easy"
+    environmental_constraints: list[str] = Field(default_factory=list)
 
 
 class Capture(BaseModel):
@@ -380,6 +388,19 @@ class ChecklistStatus(BaseModel):
     landed: bool = False
     evidence_submitted: bool = False
     complete: bool = False
+
+
+class InspectionAffordances(BaseModel):
+    """Visible workflow guidance for the inspection director."""
+
+    mission_phase: str = "preflight"
+    waiting_on: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    next_due_steps: int | None = None
+    recommended_action_categories: list[str] = Field(default_factory=list)
+    action_availability: dict[str, bool] = Field(default_factory=dict)
+    pending_asset_ids: list[str] = Field(default_factory=list)
+    suggested_tools: list[str] = Field(default_factory=list)
 
 
 class RewardBreakdown(BaseModel):
@@ -453,6 +474,8 @@ class DroneObservation(Observation):
     site_map: SiteMap | None = None
     visible_assets: list[InspectableAsset] = Field(default_factory=list)
     evidence_artifacts: list[InspectionArtifact] = Field(default_factory=list)
+    inspection_affordances: InspectionAffordances = Field(default_factory=InspectionAffordances)
+    tool_catalog: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     state_summary: dict[str, Any] = Field(default_factory=dict)
     last_capture: Capture | None = None

@@ -12,7 +12,7 @@ from dronecaptureops.controllers.base import DroneController
 from dronecaptureops.controllers.geometry_controller import GeometryController
 from dronecaptureops.core.constants import DEFAULT_DOMAIN, DEFAULT_SEED, INVALID_ACTION_LIMIT
 from dronecaptureops.core.errors import ActionValidationError, EpisodeDoneError, SafetyViolationError
-from dronecaptureops.core.models import DroneObservation, DroneVisibleState, RawDroneAction
+from dronecaptureops.core.models import DroneObservation, DroneVisibleState, InspectionAffordances, RawDroneAction
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.generation.scenario_generator import ScenarioGenerator
 from dronecaptureops.rewards.reward_aggregator import RewardAggregator, RewardStepContext
@@ -46,6 +46,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         seed: int | None = None,
         episode_id: str | None = None,
         domain: str = DEFAULT_DOMAIN,
+        scenario_family: str | None = None,
         **_: Any,
     ) -> DroneObservation:
         """Create a reproducible scenario and return the first observation."""
@@ -54,6 +55,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             seed=DEFAULT_SEED if seed is None else seed,
             domain=domain,
             episode_id=episode_id,
+            scenario_family=scenario_family,
         )
         self._controller.reset(self._world)
         self._rewards.compute(self._world)
@@ -196,6 +198,8 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             site_map=world.visible_site_map(),
             visible_assets=[asset.model_copy(deep=True) for asset in world.assets],
             evidence_artifacts=[artifact.model_copy(deep=True) for artifact in world.evidence_artifacts],
+            inspection_affordances=self._inspection_affordances(world),
+            tool_catalog=self._tools.catalog_as_json(world),
             warnings=self._visible_warnings(world),
             state_summary=self._state_summary(world),
             last_capture=world.capture_log[-1].model_copy(deep=True) if world.capture_log else None,
@@ -206,6 +210,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             metadata={
                 "episode_id": world.episode_id,
                 "domain": world.domain,
+                "scenario_family": world.scenario_family,
                 "scenario_seed": world.scenario_seed,
                 "step_count": world.step_count,
                 "termination_reason": world.termination_reason,
@@ -233,3 +238,98 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             "returned_home": world.checklist_status.returned_home,
             "landed": world.checklist_status.landed,
         }
+
+    def _inspection_affordances(self, world: EpisodeWorld) -> InspectionAffordances:
+        action_availability = self._tools.action_availability(world)
+        pending_assets = [
+            asset.asset_id
+            for asset in world.assets
+            if asset.asset_id not in set(world.checklist_status.thermal_rows_covered)
+        ]
+        blockers = self._inspection_blockers(world, pending_assets)
+        phase = self._mission_phase(world, pending_assets, blockers)
+        recommended = self._recommended_action_categories(world, pending_assets, blockers)
+        suggested = [
+            name for name in self._suggested_tools(world, pending_assets, phase)
+            if action_availability.get(name, False)
+        ]
+        waiting_on = []
+        if world.telemetry.camera.capture_ready is False:
+            waiting_on.append("camera_ready")
+        return InspectionAffordances(
+            mission_phase=phase,
+            waiting_on=waiting_on,
+            blockers=blockers,
+            next_due_steps=max(world.max_steps - world.step_count, 0),
+            recommended_action_categories=recommended,
+            action_availability=action_availability,
+            pending_asset_ids=pending_assets,
+            suggested_tools=suggested,
+        )
+
+    def _mission_phase(self, world: EpisodeWorld, pending_assets: list[str], blockers: list[str]) -> str:
+        if world.done or world.checklist_status.evidence_submitted:
+            return "closed"
+        if world.telemetry.autopilot.mode == "idle":
+            return "preflight"
+        if pending_assets:
+            return "survey"
+        if world.checklist_status.anomalies_detected and not world.checklist_status.anomaly_rgb_pairs:
+            return "followup_capture"
+        if not world.checklist_status.returned_home:
+            return "return"
+        if not world.checklist_status.landed:
+            return "landing"
+        if blockers:
+            return "pre_report"
+        return "ready_to_submit"
+
+    def _inspection_blockers(self, world: EpisodeWorld, pending_assets: list[str]) -> list[str]:
+        blockers: list[str] = []
+        if pending_assets:
+            blockers.append("thermal_rows_pending")
+        if world.checklist_status.anomalies_detected and not world.checklist_status.anomaly_rgb_pairs:
+            blockers.append("rgb_followup_pending")
+        if world.mission.must_return_home and not world.checklist_status.returned_home:
+            blockers.append("return_home_pending")
+        if not world.checklist_status.landed:
+            blockers.append("landing_pending")
+        if world.safety_violations:
+            blockers.append("safety_violation_present")
+        return list(dict.fromkeys(blockers))
+
+    def _recommended_action_categories(
+        self,
+        world: EpisodeWorld,
+        pending_assets: list[str],
+        blockers: list[str],
+    ) -> list[str]:
+        categories: list[str] = []
+        if world.telemetry.autopilot.mode == "idle":
+            categories.append("flight")
+        if pending_assets:
+            categories.extend(["map", "camera", "inspection"])
+        if "rgb_followup_pending" in blockers:
+            categories.extend(["camera", "evidence"])
+        if "return_home_pending" in blockers or "landing_pending" in blockers:
+            categories.append("recovery")
+        if not blockers:
+            categories.append("report")
+        return list(dict.fromkeys(categories))
+
+    def _suggested_tools(self, world: EpisodeWorld, pending_assets: list[str], phase: str) -> list[str]:
+        if phase == "preflight":
+            return ["get_mission_checklist", "list_assets", "takeoff"]
+        if phase == "survey":
+            if world.telemetry.autopilot.mode == "guided":
+                return ["move_to_asset", "point_camera_at", "capture_thermal", "inspect_capture"]
+            return ["takeoff", "move_to_asset"]
+        if phase == "followup_capture":
+            return ["point_camera_at", "set_camera_source", "capture_rgb", "inspect_capture"]
+        if phase == "return":
+            return ["estimate_return_margin", "return_home"]
+        if phase == "landing":
+            return ["land"]
+        if phase == "ready_to_submit":
+            return ["submit_evidence_pack"]
+        return ["get_telemetry"]

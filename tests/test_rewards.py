@@ -1,5 +1,7 @@
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
+from dronecaptureops.core.models import EvidenceReport
 from dronecaptureops.core.models import RawDroneAction
+from dronecaptureops.rewards.verifiers import compute_integrity_gate, compute_issue_capture
 
 
 def act(tool_name: str, **arguments):
@@ -19,6 +21,9 @@ def complete_capture_flow(env: DroneCaptureOpsEnvironment):
     env.step(act("inspect_capture", photo_id=obs.last_capture.photo_id))
     env.step(act("fly_to_viewpoint", x=30, y=16, z=12, yaw_deg=-90, speed_mps=4))
     obs = env.step(act("capture_rgb", label="rgb anomaly context"))
+    if set(env.debug_world.checklist_status.anomalies_detected) - set(env.debug_world.checklist_status.anomaly_rgb_pairs):
+        env.step(act("point_camera_at", asset_id="row_B8"))
+        obs = env.step(act("capture_rgb", label="rgb secondary anomaly context"))
     env.step(act("return_home"))
     return env.step(act("land"))
 
@@ -181,3 +186,54 @@ def test_structured_report_payload_can_complete_mission():
     assert obs.action_result["accepted"] is True
     assert obs.reward_breakdown.integrity_gate == 1.0
     assert obs.reward_breakdown.grounded_report >= 0.75
+
+
+def test_false_positive_glare_is_not_required_issue_reward():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=2203, scenario_family="false_positive_glare")
+
+    score, debug = compute_issue_capture(env.debug_world)
+
+    assert score == 1.0
+    assert debug["issues_required"] == 0
+    assert all(not defect.counts_for_issue_reward for defect in env.debug_world.hidden_defects)
+
+
+def test_unknown_finding_id_is_integrity_penalized():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=2202, scenario_family="bypass_diode_fault")
+    world = env.debug_world
+    known_defect = world.hidden_defects[0].defect_id
+    world.final_report = EvidenceReport(findings=[{"finding": known_defect}, {"finding": "hallucinated_issue"}])
+
+    integrity_gate, warnings = compute_integrity_gate(world)
+
+    assert integrity_gate == 0.2
+    assert any("unsupported issue claims" in warning for warning in warnings)
+
+
+def test_natural_language_finding_is_not_treated_as_hallucinated_issue_id():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=2202, scenario_family="bypass_diode_fault")
+    world = env.debug_world
+    world.final_report = EvidenceReport(findings=[{"finding": "Thermal anomaly observed on the inspected row"}])
+
+    _, warnings = compute_integrity_gate(world)
+
+    assert not any("unsupported issue claims" in warning for warning in warnings)
+
+
+def test_process_reward_only_fires_on_progress_not_idle_actions():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=2101, scenario_family="single_hotspot")
+
+    takeoff = env.step(act("takeoff", altitude_m=18))
+    moved = env.step(act("move_to_asset", asset_id="row_B6", standoff_bucket="far", speed_mps=5))
+    pointed = env.step(act("point_camera_at", asset_id="row_B6"))
+    assert takeoff.reward_breakdown.process_reward == 0.0
+    assert moved.reward_breakdown.process_reward == 0.0
+    assert pointed.reward_breakdown.process_reward == 0.0
+
+    env.step(act("set_camera_source", source="thermal"))
+    captured = env.step(act("capture_thermal", label="thermal overview"))
+    assert captured.reward_breakdown.process_reward > 0.0

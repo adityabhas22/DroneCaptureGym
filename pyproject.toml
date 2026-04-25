@@ -25,7 +25,10 @@ train = [
 ]
 
 [project.scripts]
+server = "server.app:main"
 dronecaptureops-server = "server.app:main"
+dronecaptureops-run-suite = "training.run_suite:main"
+dronecaptureops-trace-episode = "training.trace_episode:main"
 
 [tool.setuptools.packages.find]
 include = ["dronecaptureops*", "server*"]
