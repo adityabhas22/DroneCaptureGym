@@ -76,3 +76,16 @@ to bracket the priority dial.
   scheduler assertion v2 hit during rollouts.
 - Cumulative cost burned: ~$15. Budget remaining: ~$75 across 3 accounts.
 - Resubmitting v4 with vLLM 0.11.2 + V0 forced + max_num_batched_tokens fix.
+
+### Cron tick 6 (v4 ERROR'd) — ESCALATING (4 attempts hit init failures)
+- Both v4 runs ERROR'd. Same CUDA Error 802 ("system not yet initialized") but the
+  failure point shifted: it now appears at PyTorch's `torch.cuda.__init__:182`
+  (`cudaGetDeviceCount()`), BEFORE vLLM init begins. v2 with the SAME vLLM 0.11.2
+  pin got past this — so the failure is environmental, not pin-driven.
+- Pattern: v3 + v4 both fail at CUDA init regardless of vLLM pin (0.10.x AND 0.11.2).
+  v2 (0.11.2) made it past CUDA init and only hit the V0 scheduler assertion.
+  This strongly suggests intermittent H200 driver/container state on HF Jobs, not
+  an application-level bug we can patch.
+- Cumulative cost: ~$20. Budget remaining: ~$70.
+- Per cron rules ("vLLM crashes again at init: ESCALATE to user — 4 attempts already,
+  do not silently retry"), holding v5 submission and escalating with options.

@@ -41,3 +41,9 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 
 ### Cron tick 5 (v3 ERROR'd) — same CUDA init bug as Run 1
 - Resubmitting v4 with the version bump back to 0.11.x.
+
+### Cron tick 6 (v4 ERROR'd) — ESCALATING (same as Run 1)
+- v4 ERROR'd identically to Run 1: CUDA Error 802 at torch.cuda.__init__,
+  BEFORE vLLM starts. Environmental, not pin-related — v2 with same vLLM
+  pin made it past this point.
+- Cumulative cost across both runs: ~$20. Holding v5, escalating to user.
