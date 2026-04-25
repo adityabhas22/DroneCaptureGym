@@ -143,7 +143,15 @@ def _load_engine(
     )
 
 
-def _make_policy(engine, env: DroneCaptureOpsEnvironment, *, task_id: str, temperature: float, max_tokens: int, max_history_steps: int):
+def _make_vllm_policy(
+    engine,
+    env: DroneCaptureOpsEnvironment,
+    *,
+    task_id: str,
+    temperature: float,
+    max_tokens: int,
+    max_history_steps: int,
+):
     from dronecaptureops.agent import VLLMPolicy  # type: ignore[attr-defined]
 
     return VLLMPolicy(
@@ -154,6 +162,55 @@ def _make_policy(engine, env: DroneCaptureOpsEnvironment, *, task_id: str, tempe
         max_tokens=max_tokens,
         max_history_steps=max_history_steps,
     )
+
+
+def _make_hf_policy(
+    env: DroneCaptureOpsEnvironment,
+    *,
+    model: str,
+    task_id: str,
+    temperature: float,
+    top_p: float,
+    max_tokens: int,
+    max_history_steps: int,
+    api_base_url: str,
+    api_key: str | None,
+    use_tool_calls: bool,
+    max_retries: int,
+    initial_backoff_s: float,
+    request_timeout_s: float,
+):
+    from dronecaptureops.agent import HFInferencePolicy  # type: ignore[attr-defined]
+
+    return HFInferencePolicy(
+        env=env,
+        task_id=task_id,
+        model=model,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+        max_history_steps=max_history_steps,
+        api_base_url=api_base_url,
+        api_key=api_key,
+        use_tool_calls=use_tool_calls,
+        max_retries=max_retries,
+        initial_backoff_s=initial_backoff_s,
+        request_timeout_s=request_timeout_s,
+    )
+
+
+def _make_offline_policy(model: str, env: DroneCaptureOpsEnvironment, *, task_id: str, seed: int):
+    """Scripted/random/oracle baselines that need no API."""
+
+    from dronecaptureops.agent import RandomPolicy, ScriptedPolicy, TaskOraclePolicy
+
+    if model in {"task_oracle", "oracle"}:
+        return TaskOraclePolicy(task_id=task_id)
+    if model == "scripted":
+        return ScriptedPolicy()
+    if model == "random":
+        return RandomPolicy(seed=seed)
+    raise SystemExit(f"unknown offline policy: {model!r} (expected task_oracle, scripted, random)")
 
 
 # ---------------------------------------------------------------------------
@@ -371,19 +428,42 @@ def _row_to_jsonable(row: EvalRow) -> dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate base / fine-tuned models on DroneCaptureOps tasks via vLLM.")
-    parser.add_argument("--models", required=True, help="Comma-separated HF model IDs.")
+    parser = argparse.ArgumentParser(description="Evaluate base / fine-tuned models on DroneCaptureOps tasks.")
+    parser.add_argument("--models", required=True, help="Comma-separated HF model IDs (or `task_oracle`/`scripted`/`random` for offline providers).")
+    parser.add_argument(
+        "--provider",
+        default="hf",
+        choices=["hf", "vllm", "offline"],
+        help="hf=HF hosted inference (no GPU); vllm=local vLLM; offline=scripted/random/oracle baselines.",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--task-tier", default="short", choices=["short", "stretch", "all"], help="Filter tasks by horizon tier.")
     group.add_argument("--tasks", default=None, help="Comma-separated task IDs (overrides --task-tier).")
-    parser.add_argument("--seeds", type=int, default=3)
+    parser.add_argument("--seeds", type=int, default=5, help="Seeds per (model, task). Use >=5 for statistical power.")
     parser.add_argument("--seed-offset", type=int, default=0)
     parser.add_argument("--output", type=Path, required=True, help="JSONL path for per-cell rows.")
     parser.add_argument("--summary-output", type=Path, default=None, help="Optional JSON path for aggregated summary.")
-    parser.add_argument("--max-model-len", type=int, default=32768)
+    parser.add_argument(
+        "--audit-trail",
+        type=Path,
+        default=None,
+        help="Optional JSONL path. When set, every (cell, turn) records the request messages, "
+             "raw model output, and parsed action — for auditability.",
+    )
+    # Generation knobs (shared across providers)
     parser.add_argument("--max-history-steps", type=int, default=12)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--temperature", type=float, default=0.4)
+    parser.add_argument("--top-p", type=float, default=0.9)
+    # HF-specific
+    parser.add_argument("--hf-base-url", default="https://router.huggingface.co/v1", help="OpenAI-compat base URL for HF inference.")
+    parser.add_argument("--hf-api-key", default=None, help="Override HF_TOKEN for one run.")
+    parser.add_argument("--hf-max-retries", type=int, default=6)
+    parser.add_argument("--hf-initial-backoff-s", type=float, default=2.0)
+    parser.add_argument("--hf-request-timeout-s", type=float, default=120.0)
+    parser.add_argument("--no-tool-calls", action="store_true", help="Force JSON-text replies (skip native tool_calls).")
+    # vLLM-specific
+    parser.add_argument("--max-model-len", type=int, default=32768)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.85)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--enforce-eager", action="store_true", help="Disable CUDA graphs (slower; sometimes needed for compat).")
@@ -416,49 +496,65 @@ def main() -> int:
     LOG.info("computing oracle reference trajectories for %d tasks", len(set(c.task_id for c in plan)))
     oracle_refs = _precompute_oracle_refs(plan)
 
-    # Group cells by model so we load each model exactly once.
+    # Group cells by model so we load model weights/engines at most once
+    # per model. For HF inference the policy itself is cheap, so the loop
+    # still runs sequentially but reuses the per-model client.
     cells_by_model: dict[str, list[EvalCell]] = defaultdict(list)
     for cell in plan:
         cells_by_model[cell.model].append(cell)
 
-    with args.output.open("w") as handle:
-        for model, cells in cells_by_model.items():
-            LOG.info("loading model %s (%d cells)", model, len(cells))
-            engine = _load_engine(
-                model,
-                max_model_len=args.max_model_len,
-                gpu_memory_utilization=args.gpu_memory_utilization,
-                tensor_parallel_size=args.tensor_parallel_size,
-                enforce_eager=args.enforce_eager,
-                trust_remote_code=args.trust_remote_code,
-            )
-            try:
-                for idx, cell in enumerate(cells, start=1):
-                    LOG.info("[%s] cell %d/%d :: %s :: seed=%d", model, idx, len(cells), cell.task_id, cell.seed)
-                    env = DroneCaptureOpsEnvironment()
-                    policy = _make_policy(
-                        engine, env,
-                        task_id=cell.task_id,
-                        temperature=args.temperature,
-                        max_tokens=args.max_tokens,
-                        max_history_steps=args.max_history_steps,
+    audit_handle = args.audit_trail.open("w") if args.audit_trail is not None else None
+    if audit_handle is not None:
+        args.audit_trail.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with args.output.open("w") as handle:
+            for model, cells in cells_by_model.items():
+                LOG.info("[%s] %d cells", model, len(cells))
+
+                engine = None
+                if args.provider == "vllm":
+                    LOG.info("loading vLLM engine for %s", model)
+                    engine = _load_engine(
+                        model,
+                        max_model_len=args.max_model_len,
+                        gpu_memory_utilization=args.gpu_memory_utilization,
+                        tensor_parallel_size=args.tensor_parallel_size,
+                        enforce_eager=args.enforce_eager,
+                        trust_remote_code=args.trust_remote_code,
                     )
-                    runner = RolloutRunner(env=env)
-                    result = runner.run(
-                        policy,
-                        seed=cell.seed,
-                        task_id=cell.task_id,
-                        max_steps=cell.max_steps,
-                    )
-                    oracle_ref = oracle_refs.get((cell.task_id, cell.seed))
-                    row = _row_from_result(model, cell, result, oracle_result=oracle_ref)
-                    rows.append(row)
-                    handle.write(json.dumps(_row_to_jsonable(row), sort_keys=True) + "\n")
-                    handle.flush()
-            finally:
-                # vLLM holds a process-wide CUDA context; release it before
-                # loading the next model.
-                del engine
+
+                try:
+                    for idx, cell in enumerate(cells, start=1):
+                        LOG.info("[%s] cell %d/%d :: %s :: seed=%d", model, idx, len(cells), cell.task_id, cell.seed)
+                        env = DroneCaptureOpsEnvironment()
+                        policy = _build_policy(args, model, env, cell, engine=engine)
+                        runner = RolloutRunner(env=env)
+                        try:
+                            result = runner.run(
+                                policy,
+                                seed=cell.seed,
+                                task_id=cell.task_id,
+                                max_steps=cell.max_steps,
+                            )
+                        except Exception as exc:  # noqa: BLE001 — record + continue
+                            LOG.exception("[%s] cell failed (%s seed=%d): %s", model, cell.task_id, cell.seed, exc)
+                            continue
+
+                        oracle_ref = oracle_refs.get((cell.task_id, cell.seed))
+                        row = _row_from_result(model, cell, result, oracle_result=oracle_ref)
+                        rows.append(row)
+                        handle.write(json.dumps(_row_to_jsonable(row), sort_keys=True) + "\n")
+                        handle.flush()
+
+                        if audit_handle is not None:
+                            _write_audit_record(audit_handle, model, cell, policy, result)
+                finally:
+                    if engine is not None:
+                        del engine
+    finally:
+        if audit_handle is not None:
+            audit_handle.close()
 
     elapsed = time.time() - started
     LOG.info("done; %d cells in %.1fs (%.1fs/cell avg)", len(rows), elapsed, elapsed / max(len(rows), 1))
@@ -472,6 +568,99 @@ def main() -> int:
         LOG.info("summary written to %s", args.summary_output)
 
     return 0
+
+
+def _build_policy(args, model: str, env: DroneCaptureOpsEnvironment, cell: EvalCell, *, engine):
+    """Dispatch to the right policy factory based on --provider."""
+
+    if args.provider == "vllm":
+        if engine is None:
+            raise RuntimeError("vllm provider requires a loaded engine")
+        return _make_vllm_policy(
+            engine, env,
+            task_id=cell.task_id,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            max_history_steps=args.max_history_steps,
+        )
+    if args.provider == "hf":
+        return _make_hf_policy(
+            env,
+            model=model,
+            task_id=cell.task_id,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            max_tokens=args.max_tokens,
+            max_history_steps=args.max_history_steps,
+            api_base_url=args.hf_base_url,
+            api_key=args.hf_api_key,
+            use_tool_calls=not args.no_tool_calls,
+            max_retries=args.hf_max_retries,
+            initial_backoff_s=args.hf_initial_backoff_s,
+            request_timeout_s=args.hf_request_timeout_s,
+        )
+    if args.provider == "offline":
+        return _make_offline_policy(model, env, task_id=cell.task_id, seed=cell.seed)
+    raise SystemExit(f"unknown --provider: {args.provider!r}")
+
+
+def _write_audit_record(handle, model: str, cell: EvalCell, policy, result: RolloutResult) -> None:
+    """Persist the full per-turn HF inference trail for downstream auditing.
+
+    For HF policy the policy itself records every (request_messages,
+    response_text, tool_calls, finish_reason, latency_ms, retries,
+    parse_error) — we just dump those. For other providers we record
+    the trajectory's actions + observations as a fallback so the audit
+    file is uniformly populated.
+    """
+
+    turns = getattr(policy, "turns", None) or []
+    if turns:
+        for turn in turns:
+            handle.write(
+                json.dumps(
+                    {
+                        "model": model,
+                        "task_id": cell.task_id,
+                        "seed": cell.seed,
+                        "step": turn.step,
+                        "request_messages": turn.request_messages,
+                        "response_text": turn.response_text,
+                        "response_tool_calls": turn.response_tool_calls,
+                        "finish_reason": turn.finish_reason,
+                        "prompt_tokens": turn.prompt_tokens,
+                        "completion_tokens": turn.completion_tokens,
+                        "total_tokens": turn.total_tokens,
+                        "latency_ms": turn.latency_ms,
+                        "retries": turn.retries,
+                        "parse_error": turn.parse_error,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+    else:
+        # Offline / vLLM policies don't record per-turn audit records;
+        # still emit the trajectory steps so the audit file isn't empty.
+        for step_record in result.trajectory:
+            handle.write(
+                json.dumps(
+                    {
+                        "model": model,
+                        "task_id": cell.task_id,
+                        "seed": cell.seed,
+                        "step": step_record.step,
+                        "action": step_record.action,
+                        "parse_error": step_record.parse_error,
+                        "reward": step_record.reward,
+                        "reward_delta": step_record.reward_delta,
+                        "done": step_record.done,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+    handle.flush()
 
 
 if __name__ == "__main__":

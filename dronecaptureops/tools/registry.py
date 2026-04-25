@@ -14,6 +14,24 @@ from dronecaptureops.core.state import EpisodeWorld
 ToolHandler = Callable[[EpisodeWorld, dict[str, Any]], dict[str, Any]]
 
 
+ArgType = str  # one of: "number" | "string" | "list[string]" | "boolean"
+
+
+@dataclass(frozen=True)
+class ArgSpec:
+    """Typed schema for a single tool argument.
+
+    Used for both LLM-readable catalog metadata and registry-level type/range
+    validation. Per-handler coercion still runs as defense in depth.
+    """
+
+    type: ArgType
+    description: str = ""
+    minimum: float | None = None
+    maximum: float | None = None
+    choices: tuple[str, ...] | None = None
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     """Public tool schema."""
@@ -23,6 +41,7 @@ class ToolSpec:
     required: set[str] = field(default_factory=set)
     optional: set[str] = field(default_factory=set)
     handler: ToolHandler | None = None
+    arg_schema: dict[str, ArgSpec] = field(default_factory=dict)
 
 
 class ToolRegistry:
@@ -50,6 +69,16 @@ class ToolRegistry:
                     "description": spec.description,
                     "required_args": sorted(spec.required),
                     "optional_args": sorted(spec.optional),
+                    "arg_schema": {
+                        arg_name: {
+                            "type": arg.type,
+                            "description": arg.description,
+                            "minimum": arg.minimum,
+                            "maximum": arg.maximum,
+                            "choices": list(arg.choices) if arg.choices else None,
+                        }
+                        for arg_name, arg in sorted(spec.arg_schema.items())
+                    },
                     "available": availability.get(name, True),
                 }
             )
@@ -95,6 +124,10 @@ class ToolRegistry:
             raise ActionValidationError(f"{action.tool_name} missing required arguments: {sorted(missing)}")
         if unknown:
             raise ActionValidationError(f"{action.tool_name} received unknown arguments: {sorted(unknown)}")
+        for arg_name, arg in spec.arg_schema.items():
+            if arg_name not in action.arguments:
+                continue
+            _validate_arg_value(action.tool_name, arg_name, arg, action.arguments[arg_name])
         return spec
 
     def execute(self, world: EpisodeWorld, action: RawDroneAction) -> dict[str, Any]:
@@ -102,3 +135,34 @@ class ToolRegistry:
         if spec.handler is None:
             raise ActionValidationError(f"tool has no handler: {action.tool_name}")
         return spec.handler(world, action.arguments)
+
+
+def _validate_arg_value(tool_name: str, arg_name: str, arg: ArgSpec, value: Any) -> None:
+    """Type/range/enum validation against an ArgSpec; raises ActionValidationError."""
+
+    if arg.type == "number":
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ActionValidationError(f"{tool_name}.{arg_name}: expected number, got {type(value).__name__}")
+        numeric = float(value)
+        if numeric != numeric:  # NaN
+            raise ActionValidationError(f"{tool_name}.{arg_name}: NaN is not allowed")
+        if arg.minimum is not None and numeric < arg.minimum:
+            raise ActionValidationError(f"{tool_name}.{arg_name} below minimum {arg.minimum}: {numeric}")
+        if arg.maximum is not None and numeric > arg.maximum:
+            raise ActionValidationError(f"{tool_name}.{arg_name} above maximum {arg.maximum}: {numeric}")
+        return
+    if arg.type == "string":
+        if not isinstance(value, str) or not value.strip():
+            raise ActionValidationError(f"{tool_name}.{arg_name}: expected non-empty string, got {value!r}")
+        if arg.choices is not None and value not in arg.choices:
+            raise ActionValidationError(f"{tool_name}.{arg_name} must be one of {list(arg.choices)}, got {value!r}")
+        return
+    if arg.type == "list[string]":
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ActionValidationError(f"{tool_name}.{arg_name}: expected list of strings")
+        return
+    if arg.type == "boolean":
+        if not isinstance(value, bool):
+            raise ActionValidationError(f"{tool_name}.{arg_name}: expected boolean, got {type(value).__name__}")
+        return
+    raise ActionValidationError(f"{tool_name}.{arg_name}: unsupported schema type {arg.type!r}")

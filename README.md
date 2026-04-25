@@ -200,6 +200,14 @@ Hidden defects and verifier labels live only in internal `EpisodeWorld`. Observa
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a new tool, reward component, task, or domain. Each section lists the files to touch, contracts to honor, and tests to add.
 
+## Controller Strategy
+
+The default backend is `GeometryController` (deterministic, CPU-light). `DroneKitSITLController` exists as a placeholder that raises `NotImplementedError`; SITL/ArduPilot work is deferred until the reward and benchmark surface stabilizes. Details and the minimum viable SITL feature set are in [docs/controller-strategy.md](docs/controller-strategy.md).
+
+## Packaging Notes
+
+Runtime dependencies (`openenv-core`, `pydantic`, `pyyaml`, `fastapi`, `uvicorn`) are pinned in `pyproject.toml` so a clean `pip install -e .` boots the OpenEnv server without surprises. `setuptools.packages.find` includes only `dronecaptureops*` and `server*`; `tests/`, `training/`, `examples/`, `docs/`, and `artifacts/` are excluded from the wheel. `uv.lock` is checked in for reproducible local installs but is not the canonical lock — `pyproject.toml` is. A `LICENSE` file has not been added yet; if this repo is going public, drop one in at the root before the first release.
+
 ## Demo Direction
 
 A weak baseline should fly to a generic overview point, capture one or two low-value photos, miss an anomaly or close-up, and submit an incomplete pack. A stronger trained agent should read the checklist, capture thermal overview, inspect quality, reposition for missing rows or anomalies, capture RGB close-up evidence, avoid the no-fly zone, return home, land, and submit a photo-linked evidence pack.

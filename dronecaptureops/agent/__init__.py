@@ -64,6 +64,10 @@ def __getattr__(name):  # noqa: ANN001 - PEP 562 lazy import shim
         from dronecaptureops.agent import vllm_policy
 
         return getattr(vllm_policy, name)
+    if name in {"HFInferencePolicy", "HFInferenceTurnRecord", "HF_DEFAULT_BASE_URL"}:
+        from dronecaptureops.agent import hf_inference_policy
+
+        return getattr(hf_inference_policy, name)
     raise AttributeError(f"module 'dronecaptureops.agent' has no attribute {name!r}")
 
 

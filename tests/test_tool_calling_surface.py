@@ -46,6 +46,41 @@ def test_asset_level_tools_drive_visible_inspection_workflow():
     assert "meets_required_reserve" in margin.action_result
 
 
+def test_tool_catalog_exposes_typed_arg_schema():
+    """Issue #2: catalog includes type/range/choices for each argument."""
+
+    env = DroneCaptureOpsEnvironment()
+    obs = env.reset(seed=7)
+    catalog = {tool["name"]: tool for tool in obs.tool_catalog}
+
+    takeoff = catalog["takeoff"]["arg_schema"]
+    assert takeoff["altitude_m"]["type"] == "number"
+    assert takeoff["altitude_m"]["minimum"] == 0.0
+    assert takeoff["altitude_m"]["maximum"] == 120.0
+
+    set_source = catalog["set_camera_source"]["arg_schema"]
+    assert set_source["source"]["choices"] == ["rgb", "thermal", "rgb_thermal"]
+
+    move = catalog["move_to_asset"]["arg_schema"]
+    assert move["standoff_bucket"]["choices"] == ["far", "mid", "close"]
+
+
+def test_typed_validation_rejects_wrong_types_and_unknown_enums():
+    """Issue #2: registry validation surfaces a clear error before the handler runs."""
+
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+
+    bad_type = env.step(act("takeoff", altitude_m="high"))
+    assert bad_type.error and "altitude_m" in bad_type.error and "number" in bad_type.error
+
+    bad_enum = env.step(act("set_camera_source", source="lidar"))
+    assert bad_enum.error and "source" in bad_enum.error
+
+    bad_range = env.step(act("takeoff", altitude_m=500.0))
+    assert bad_range.error and "above maximum" in bad_range.error
+
+
 def test_route_replan_exposes_visible_constraints_without_hidden_truth():
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=2301, scenario_family="blocked_corridor_replan")
