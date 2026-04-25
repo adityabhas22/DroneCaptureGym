@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from dronecaptureops.core.models import EvidenceReport
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.rewards.report_grounding import validate_evidence_report
+from dronecaptureops.rewards.verifiers import compute_issue_capture, compute_required_coverage
 from dronecaptureops.simulation.world import mark_return_status
 
 
@@ -24,14 +25,10 @@ class ReportTools:
         world.checklist_status.evidence_submitted = True
         mark_return_status(world)
         score, warnings = validate_evidence_report(world, report)
-        required = set(world.mission.required_rows)
-        rows_done = required <= set(world.checklist_status.thermal_rows_covered)
-        detected = set(world.checklist_status.anomalies_detected)
-        paired = set(world.checklist_status.anomaly_rgb_pairs)
-        anomaly_pairing_done = (
-            not detected
-            or detected <= paired
-        )
+        cited_coverage, _ = compute_required_coverage(world, cited_only=True)
+        cited_issue, _ = compute_issue_capture(world, cited_only=True)
+        rows_done = cited_coverage >= 1.0
+        anomaly_pairing_done = cited_issue >= 1.0
         world.checklist_status.complete = bool(
             rows_done
             and anomaly_pairing_done

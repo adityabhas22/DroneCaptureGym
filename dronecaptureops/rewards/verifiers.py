@@ -85,27 +85,34 @@ def compute_capture_quality(world: EpisodeWorld, target_id: str, photo_id: str) 
     return capture.quality_score
 
 
-def compute_required_coverage(world: EpisodeWorld) -> tuple[float, dict[str, Any]]:
+def compute_required_coverage(world: EpisodeWorld, *, cited_only: bool = False) -> tuple[float, dict[str, Any]]:
     required = list(world.mission.required_rows)
     if not required:
         return 1.0, {"targets_required": 0, "targets_covered": 0}
     covered = [
         row_id
         for row_id in required
-        if valid_target_captures(world, row_id, sensor="thermal", min_quality=MIN_ROW_QUALITY)
+        if valid_target_captures(world, row_id, sensor="thermal", min_quality=MIN_ROW_QUALITY, cited_only=cited_only)
     ]
     return round(len(covered) / len(required), 4), {
         "targets_required": len(required),
         "targets_covered": len(covered),
         "covered_rows": covered,
         "missing_rows": [row_id for row_id in required if row_id not in covered],
+        "cited_only": cited_only,
     }
 
 
-def defect_captured(world: EpisodeWorld, defect: HiddenDefect) -> tuple[float, dict[str, Any]]:
+def defect_captured(world: EpisodeWorld, defect: HiddenDefect, *, cited_only: bool = False) -> tuple[float, dict[str, Any]]:
     thermal = [
         capture
-        for capture in valid_target_captures(world, defect.target_id, sensor=defect.required_sensor, min_quality=defect.min_quality)
+        for capture in valid_target_captures(
+            world,
+            defect.target_id,
+            sensor=defect.required_sensor,
+            min_quality=defect.min_quality,
+            cited_only=cited_only,
+        )
         if defect.defect_id in capture.detected_anomalies
         and capture.resolution_score >= defect.min_resolution_score
         and capture.occlusion_pct <= defect.max_occlusion
@@ -115,13 +122,25 @@ def defect_captured(world: EpisodeWorld, defect: HiddenDefect) -> tuple[float, d
         return 0.0, {"defect_id": defect.defect_id, "thermal": False, "rgb_context": False}
     if not defect.requires_rgb_context:
         return 1.0, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": True}
-    rgb_context = valid_target_captures(world, defect.target_id, sensor="rgb", min_quality=MIN_ROW_QUALITY)
+    rgb_context = [
+        capture
+        for capture in valid_target_captures(
+            world,
+            defect.target_id,
+            sensor="rgb",
+            min_quality=MIN_ROW_QUALITY,
+            cited_only=cited_only,
+        )
+        if capture.resolution_score >= 0.55
+        and capture.occlusion_pct <= max(defect.max_occlusion, 0.35)
+        and _view_angle_deg(capture) <= defect.max_view_angle_deg
+    ]
     if rgb_context:
         return 1.0, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": True}
     return 0.6, {"defect_id": defect.defect_id, "thermal": True, "rgb_context": False}
 
 
-def compute_issue_capture(world: EpisodeWorld) -> tuple[float, dict[str, Any]]:
+def compute_issue_capture(world: EpisodeWorld, *, cited_only: bool = False) -> tuple[float, dict[str, Any]]:
     defects = list(world.hidden_defects)
     if not defects:
         return 1.0, {"issues_required": 0, "issues_captured": 0}
@@ -129,7 +148,7 @@ def compute_issue_capture(world: EpisodeWorld) -> tuple[float, dict[str, Any]]:
     total_weight = 0.0
     details = []
     for defect in defects:
-        score, detail = defect_captured(world, defect)
+        score, detail = defect_captured(world, defect, cited_only=cited_only)
         weight = max(defect.weight, 0.0)
         weighted += weight * score
         total_weight += weight
@@ -145,26 +164,28 @@ def compute_issue_capture(world: EpisodeWorld) -> tuple[float, dict[str, Any]]:
         "issues_required": len(defects),
         "issues_captured": captured,
         "issue_details": details,
+        "cited_only": cited_only,
     }
 
 
 def requirement_satisfied(world: EpisodeWorld, requirement_id: str) -> bool:
     if requirement_id.startswith("thermal_overview"):
-        coverage, _ = compute_required_coverage(world)
+        coverage, _ = compute_required_coverage(world, cited_only=True)
         return coverage >= 1.0
     if requirement_id.startswith("rgb_context_for_"):
         defect_id = requirement_id.removeprefix("rgb_context_for_")
         defect = next((item for item in world.hidden_defects if item.defect_id == defect_id), None)
         if defect is None:
             return False
-        score, _ = defect_captured(world, defect)
+        score, _ = defect_captured(world, defect, cited_only=True)
         return score >= 1.0
     return False
 
 
 def compute_evidence_success(world: EpisodeWorld, required_coverage: float, issue_capture: float) -> float:
     terminal_safety = 1.0 if (
-        (not world.mission.must_return_home or world.checklist_status.returned_home)
+        world.final_report is not None
+        and (not world.mission.must_return_home or world.checklist_status.returned_home)
         and world.telemetry.battery.level_pct >= world.mission.min_battery_at_done_pct
     ) else 0.0
     # Coverage is the high-weight structured requirement for the MVP; issue and terminal safety close the loop.
@@ -195,27 +216,55 @@ def compute_operational_efficiency(world: EpisodeWorld, evidence_success: float)
 
 
 def compute_photo_value(world: EpisodeWorld, capture: Capture) -> float:
-    new_target_credit = sum(
-        1.0
+    try:
+        capture_index = next(index for index, item in enumerate(world.capture_log) if item.photo_id == capture.photo_id)
+    except StopIteration:
+        capture_index = len(world.capture_log)
+    prior = world.capture_log[:capture_index]
+    prior_covered = {
+        target_id
+        for item in prior
+        if item.sensor == "thermal" and item.quality_score >= MIN_ROW_QUALITY
+        for target_id in item.targets_visible
+        if target_id in world.mission.required_rows
+    }
+    newly_covered = {
+        target_id
         for target_id in capture.targets_visible
-        if target_id in world.mission.required_rows and capture.sensor == "thermal" and capture.quality_score >= MIN_ROW_QUALITY
-    ) / max(len(world.mission.required_rows), 1)
-    issue_credit = sum(1.0 for defect_id in capture.detected_anomalies) / max(len(world.hidden_defects), 1)
+        if target_id in world.mission.required_rows
+        and capture.sensor == "thermal"
+        and capture.quality_score >= MIN_ROW_QUALITY
+        and target_id not in prior_covered
+    }
+    new_target_credit = len(newly_covered) / max(len(world.mission.required_rows), 1)
+    prior_detected = {defect_id for item in prior for defect_id in item.detected_anomalies}
+    new_issue_credit = len(set(capture.detected_anomalies) - prior_detected) / max(len(world.hidden_defects), 1)
+    sensor_context_credit = 0.0
+    if capture.sensor == "rgb":
+        for defect in world.hidden_defects:
+            if defect.target_id in capture.targets_visible:
+                sensor_context_credit = max(sensor_context_credit, 0.25)
+                break
+    previous_best = max(
+        [item.quality_score for item in prior if item.sensor == capture.sensor and set(item.targets_visible) & set(capture.targets_visible)]
+        or [0.0]
+    )
+    quality_improvement = max(0.0, capture.quality_score - previous_best)
     quality_credit = capture.quality_score if capture.targets_visible else 0.0
     report_usefulness = 1.0 if capture.photo_id in report_cited_photo_ids(world.final_report) else 0.0
-    duplicate_count = sum(
-        1
-        for prior in world.capture_log
-        if prior.photo_id != capture.photo_id
-        and prior.sensor == capture.sensor
-        and set(prior.targets_visible) == set(capture.targets_visible)
+    duplicate_count = sum(1 for item in prior if item.sensor == capture.sensor and set(item.targets_visible) == set(capture.targets_visible))
+    has_marginal_value = any(
+        value > 0.05
+        for value in (new_target_credit, new_issue_credit, sensor_context_credit, quality_improvement, report_usefulness)
     )
-    redundancy_penalty = 0.10 if duplicate_count and new_target_credit < 0.05 and issue_credit < 0.05 else 0.0
+    redundancy_penalty = 0.10 if duplicate_count and not has_marginal_value else 0.0
     return round(clamp(
         0.35 * new_target_credit
-        + 0.25 * new_target_credit
-        + 0.20 * issue_credit
-        + 0.10 * quality_credit
+        + 0.20 * new_target_credit
+        + 0.20 * new_issue_credit
+        + 0.10 * sensor_context_credit
+        + 0.10 * quality_improvement
+        + 0.05 * quality_credit
         + 0.10 * report_usefulness
         - redundancy_penalty,
         0.0,
@@ -275,10 +324,22 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
                 if not ids or not any(photo_id in real_ids for photo_id in ids):
                     warnings.append("satisfied requirement lacks valid photo evidence")
                     cap = min(cap, 0.40)
-                if "thermal" in str(item.get("requirement_id", "")).lower():
+                requirement_id = str(item.get("requirement_id", "")).lower()
+                if "thermal" in requirement_id:
+                    cited_rows = {
+                        row_id
+                        for photo_id in ids
+                        for capture in [capture_by_id(world, photo_id)]
+                        if capture is not None and capture.sensor == "thermal" and capture.quality_score >= MIN_ROW_QUALITY
+                        for row_id in capture.targets_visible
+                        if row_id in world.mission.required_rows
+                    }
                     if any(capture_by_id(world, photo_id) and capture_by_id(world, photo_id).sensor != "thermal" for photo_id in ids):
                         warnings.append("thermal requirement cites wrong sensor type")
                         cap = min(cap, 0.50)
+                    if not set(world.mission.required_rows) <= cited_rows:
+                        warnings.append("satisfied thermal requirement missing cited row coverage")
+                        cap = min(cap, 0.40)
                 if any(capture_by_id(world, photo_id) and capture_by_id(world, photo_id).quality_score < MIN_ROW_QUALITY for photo_id in ids):
                     warnings.append("satisfied requirement cites low-quality image")
                     cap = min(cap, 0.60)
@@ -288,6 +349,24 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
     if unsupported:
         warnings.append(f"unsupported issue claims: {sorted(unsupported)}")
         cap = min(cap, 0.30)
+    for issue in report.issues_found:
+        issue_id = issue.get("issue_id")
+        defect = next((item for item in world.hidden_defects if item.defect_id == issue_id), None)
+        if defect is None:
+            continue
+        score, _ = defect_captured(world, defect, cited_only=True)
+        if score < 1.0:
+            warnings.append(f"reported issue lacks complete cited evidence: {issue_id}")
+            cap = min(cap, 0.40 if score <= 0.0 else 0.60)
+    safety_text = " ".join(report.safety_notes).lower()
+    claims_returned = "return" in safety_text or "home" in safety_text
+    claims_landed = "land" in safety_text
+    if claims_returned and not world.checklist_status.returned_home:
+        warnings.append("safety note claims return-home contrary to telemetry")
+        cap = min(cap, 0.40)
+    if claims_landed and not world.checklist_status.landed:
+        warnings.append("safety note claims landing contrary to telemetry")
+        cap = min(cap, 0.40)
     return round(cap, 4), warnings
 
 
