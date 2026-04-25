@@ -77,15 +77,54 @@ to bracket the priority dial.
 - Cumulative cost burned: ~$15. Budget remaining: ~$75 across 3 accounts.
 - Resubmitting v4 with vLLM 0.11.2 + V0 forced + max_num_batched_tokens fix.
 
-### Cron tick 6 (v4 ERROR'd) — ESCALATING (4 attempts hit init failures)
-- Both v4 runs ERROR'd. Same CUDA Error 802 ("system not yet initialized") but the
-  failure point shifted: it now appears at PyTorch's `torch.cuda.__init__:182`
-  (`cudaGetDeviceCount()`), BEFORE vLLM init begins. v2 with the SAME vLLM 0.11.2
-  pin got past this — so the failure is environmental, not pin-driven.
-- Pattern: v3 + v4 both fail at CUDA init regardless of vLLM pin (0.10.x AND 0.11.2).
-  v2 (0.11.2) made it past CUDA init and only hit the V0 scheduler assertion.
-  This strongly suggests intermittent H200 driver/container state on HF Jobs, not
-  an application-level bug we can patch.
+### Cron tick 6 (v4 ERROR'd) — RCA #4 — ESCALATING (4 attempts at init)
+- Both v4 runs ERROR'd identically. Initial reading was "shifted earlier" CUDA
+  init failure, but full log trace told a different story.
+- Real root cause (read from `/tmp/run01_v4.log` lines 631–769):
+  - vLLM 0.11.2 announces: `Initializing a V1 LLM engine (v0.11.2)` despite
+    `VLLM_USE_V1=0` being set in the env. Reason: **vllm 0.11.x removed the V0
+    engine entirely** — the env var still exists but no longer has a backend
+    to switch to. This is a real regression from v2's behavior (which ran
+    vllm 0.10.x where V0 was real).
+  - V1 engine spawns `EngineCore_DP0` worker subprocess (we set
+    `VLLM_WORKER_MULTIPROC_METHOD=spawn` per the v4 launcher header).
+  - The spawned subprocess imports `vllm.v1.worker.gpu_model_runner` →
+    transitively imports `vllm.v1.attention.backends.flash_attn`. At
+    *class-body* evaluation time of `FlashAttentionMetadataBuilder` (line 230),
+    vLLM calls `get_flash_attn_version()` to decide between FA2 and FA3.
+  - That call path: `fa_utils.py:41` → `flash_attn_interface.py:51` →
+    `torch.cuda.get_device_capability(device)` → `torch.cuda._lazy_init()` →
+    `RuntimeError: cudaGetDeviceCount() Error 802: system not yet initialized`.
+  - Why Error 802 in spawn mode: the parent process initialized CUDA when
+    loading the trainable Qwen model. The spawned subprocess can't safely
+    re-init CUDA in this HF Jobs container — `spawn` doesn't carry CUDA
+    state, and import-time `_lazy_init` fires before the worker has a
+    chance to set up its own context.
+- The earlier line-568 warning about CUDA init from the parent process was a
+  red herring — the parent recovered, loaded the model on GPU successfully,
+  and started vLLM. The fatal error is in the spawned worker, not the parent.
+- This explains everything across v1–v4:
+  - v1 (vllm 0.11.2 default V1): same V1 path but msgspec error masked the FA3 issue.
+  - v2 (vllm 0.10.x, V0): real V0 → no spawn subprocess → CUDA init clean → only
+    hit the scheduler assertion.
+  - v3 (vllm 0.10.x, V0): same V0 path but earlier crash in uniproc_executor's
+    own `set_device` (a 0.10.x quirk we can't patch around without forking vLLM).
+  - v4 (vllm 0.11.2, V1 forced + spawn): hit the FA3 import-time CUDA init.
+- Fix paths (NOT submitted yet — escalating):
+  1. **Drop `VLLM_WORKER_MULTIPROC_METHOD=spawn`**: let vllm V1 default to fork
+     (single-GPU). Fork inherits the parent's CUDA context, so the FA3
+     detection can read device capability from the inherited state. Cheapest
+     possible fix — 1 env var change, no code change.
+  2. **Set `VLLM_FLASH_ATTN_VERSION=2`**: tells vllm to skip the FA3 detection
+     path entirely. Avoids the import-time CUDA call. Slight perf cost (FA2 vs
+     FA3 on Hopper) but irrelevant for our 4B model.
+  3. **Cut vLLM**: use raw `transformers.generate()` for rollouts. User
+     suggested this earlier. Throughput drops 5–10× but eliminates ALL vLLM
+     init pathology. Probably can't fit 50 PPO steps × 16 rollouts in
+     remaining budget.
+  4. **Pin vllm to 0.11.0 or 0.11.1**: 0.11.2 may have introduced the
+     class-body FA3 detection. Older 0.11.x might do it lazily.
+- Recommendation: try (1) first ($5 to test), then (2) if it fails ($5 more),
+  then (3) only if both fail (most expensive but most reliable).
 - Cumulative cost: ~$20. Budget remaining: ~$70.
-- Per cron rules ("vLLM crashes again at init: ESCALATE to user — 4 attempts already,
-  do not silently retry"), holding v5 submission and escalating with options.
+- Holding v5; escalating with options per cron rules.

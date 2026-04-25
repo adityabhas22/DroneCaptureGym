@@ -42,8 +42,9 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 ### Cron tick 5 (v3 ERROR'd) — same CUDA init bug as Run 1
 - Resubmitting v4 with the version bump back to 0.11.x.
 
-### Cron tick 6 (v4 ERROR'd) — ESCALATING (same as Run 1)
-- v4 ERROR'd identically to Run 1: CUDA Error 802 at torch.cuda.__init__,
-  BEFORE vLLM starts. Environmental, not pin-related — v2 with same vLLM
-  pin made it past this point.
-- Cumulative cost across both runs: ~$20. Holding v5, escalating to user.
+### Cron tick 6 (v4 ERROR'd) — same RCA as Run 1 (see run01 log)
+- v4 ERROR'd identically. Same path: vLLM 0.11.2 ignores VLLM_USE_V1=0 (V0
+  was removed in 0.11.x), spawns V1 EngineCore subprocess, that subprocess
+  hits Error 802 during FA3 detection at `gpu_model_runner` import time.
+- Subprocess pid here: `EngineCore_DP0 pid=934`.
+- Full RCA + proposed fix paths in run01-kl002/decision-log.md.
