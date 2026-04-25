@@ -322,6 +322,9 @@ def compute_safety_gate(world: EpisodeWorld) -> float:
     for violation in world.safety_violations:
         if "collision" in violation:
             cap = min(cap, 0.0)
+        elif "privacy_capture_violation" in violation:
+            # Capturing from inside a privacy zone is a hard violation.
+            cap = min(cap, 0.0)
         elif "no_fly" in violation:
             cap = min(cap, 0.10)
         elif "privacy" in violation:

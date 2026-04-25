@@ -29,12 +29,13 @@ class ReportTools:
         cited_issue, _ = compute_issue_capture(world, cited_only=True)
         rows_done = cited_coverage >= 1.0
         anomaly_pairing_done = cited_issue >= 1.0
+        grounding_threshold = world.mission.min_report_grounding_score
         world.checklist_status.complete = bool(
             rows_done
             and anomaly_pairing_done
             and world.checklist_status.returned_home
             and world.checklist_status.landed
-            and score >= 0.6
+            and score >= grounding_threshold
         )
         world.done = True
         world.termination_reason = "evidence_submitted"

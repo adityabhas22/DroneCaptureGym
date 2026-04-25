@@ -47,8 +47,11 @@ def validate_evidence_report(world: EpisodeWorld, report: EvidenceReport | None)
     if missing_anomaly_citations:
         warnings.append(f"missing anomaly citations: {missing_anomaly_citations}")
 
-    cited_coverage, _ = compute_required_coverage(world, cited_only=True)
+    cited_coverage, cited_coverage_debug = compute_required_coverage(world, cited_only=True)
     cited_issue_capture, _ = compute_issue_capture(world, cited_only=True)
+    if cited_coverage < 1.0 and cited_ids:
+        missing_rows = cited_coverage_debug.get("missing_rows", [])
+        warnings.append(f"missing thermal row citations: {missing_rows}")
     requirement_linking = cited_coverage if cited_ids and not fake_ids and useful_cited else 0.0
     if report.evidence:
         satisfied_items = [item for item in report.evidence if str(item.get("status", "")).lower() == "satisfied"]

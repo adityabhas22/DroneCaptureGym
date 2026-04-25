@@ -29,6 +29,7 @@ class ScenarioGenerator:
         domain: str = DEFAULT_DOMAIN,
         episode_id: str | None = None,
         scenario_family: str | None = None,
+        task_id: str | None = None,
     ) -> EpisodeWorld:
         if domain not in self._builders:
             supported = ", ".join(sorted(self._builders))
@@ -37,4 +38,5 @@ class ScenarioGenerator:
             seed=normalize_seed(seed),
             episode_id=episode_id,
             scenario_family=scenario_family,
+            task_id=task_id,
         )

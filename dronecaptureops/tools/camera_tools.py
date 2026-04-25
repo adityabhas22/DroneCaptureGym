@@ -99,28 +99,54 @@ class CameraTools:
         return estimate.model_dump(mode="json") | {"quality_score": estimate.quality_score}
 
     def _capture(self, world: EpisodeWorld, sensor: SensorType, args: dict[str, Any]) -> dict[str, Any]:
+        from dronecaptureops.core.errors import SafetyViolationError
+        from dronecaptureops.simulation.world import active_zones
+
         label_raw = args.get("label")
         if label_raw is not None and not isinstance(label_raw, str):
             raise ActionValidationError(f"invalid label: expected string, got {type(label_raw).__name__}")
+
+        # Privacy zones block image capture from inside, even though they
+        # don't block flight. This is the active-inspection equivalent of
+        # respecting a "no photo" perimeter on a real site.
+        pose = world.telemetry.pose
+        for zone in active_zones(world):
+            if zone.zone_type != "privacy":
+                continue
+            if not (zone.min_x <= pose.x <= zone.max_x and zone.min_y <= pose.y <= zone.max_y):
+                continue
+            if not (zone.min_altitude_m <= pose.z <= zone.max_altitude_m):
+                continue
+            raise SafetyViolationError(f"privacy_capture_violation:{zone.zone_id}")
+
         world.telemetry.camera.active_source = sensor
         capture = self._controller.capture_image(world, sensor, label_raw)
         self._update_checklist_from_capture(world, capture)
         return capture.model_dump(mode="json") | {"quality_score": capture.quality_score}
 
     def _update_checklist_from_capture(self, world: EpisodeWorld, capture) -> None:
+        thermal_threshold = world.mission.min_capture_quality
+        rgb_threshold = world.mission.min_rgb_quality
         if capture.sensor == "thermal":
             covered = set(world.checklist_status.thermal_rows_covered)
             for target_id in capture.targets_visible:
-                if target_id in world.mission.required_rows and capture.target_quality(target_id) >= 0.55:
+                if target_id in world.mission.required_rows and capture.target_quality(target_id) >= thermal_threshold:
                     covered.add(target_id)
             world.checklist_status.thermal_rows_covered = sorted(covered)
             anomalies = set(world.checklist_status.anomalies_detected)
             anomalies.update(capture.detected_anomalies)
             world.checklist_status.anomalies_detected = sorted(anomalies)
+            # Surface (anomaly_id → target_id) mapping only after the simulator
+            # actually flagged the defect; this is the agent's first signal that
+            # the defect exists.
+            for anomaly in capture.detected_anomalies:
+                defect = next((item for item in world.hidden_defects if item.defect_id == anomaly), None)
+                if defect is not None:
+                    world.checklist_status.anomaly_targets.setdefault(anomaly, defect.target_id)
         if capture.sensor == "rgb":
             for anomaly in world.checklist_status.anomalies_detected:
                 defect = next((item for item in world.hidden_defects if item.defect_id == anomaly), None)
                 if defect is None or defect.target_id not in capture.targets_visible:
                     continue
-                if capture.target_quality(defect.target_id) >= 0.55:
+                if capture.target_quality(defect.target_id) >= rgb_threshold:
                     world.checklist_status.anomaly_rgb_pairs.setdefault(anomaly, capture.photo_id)

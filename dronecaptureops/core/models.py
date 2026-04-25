@@ -326,6 +326,16 @@ class MissionChecklist(BaseModel):
     scenario_family: str = "baseline_hotspot"
     difficulty: ScenarioDifficulty = "easy"
     environmental_constraints: list[str] = Field(default_factory=list)
+    # Task-conditioned RL fields (populated when reset is called with task=...).
+    task_id: str = ""
+    task_name: str = ""
+    success_criteria: list[str] = Field(default_factory=list)
+    public_constraints: list[str] = Field(default_factory=list)
+    task_tags: list[str] = Field(default_factory=list)
+    min_capture_quality: float = 0.55
+    min_rgb_quality: float = 0.55
+    min_report_grounding_score: float = 0.6
+    initial_battery_pct: float = 100.0
 
 
 class Capture(BaseModel):
@@ -406,6 +416,7 @@ class ChecklistStatus(BaseModel):
     thermal_rows_covered: list[str] = Field(default_factory=list)
     anomalies_detected: list[str] = Field(default_factory=list)
     anomaly_rgb_pairs: dict[str, str] = Field(default_factory=dict)
+    anomaly_targets: dict[str, str] = Field(default_factory=dict)
     targets_acknowledged: list[str] = Field(default_factory=list)
     returned_home: bool = False
     landed: bool = False

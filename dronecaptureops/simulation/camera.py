@@ -25,7 +25,12 @@ from dronecaptureops.utils.math_utils import angle_delta_deg, bearing_deg, clamp
 
 MIN_TARGET_VISIBILITY = 0.15  # below this per-target quality the target is dropped from frame
 DEFECT_DETECTION_QUALITY = 0.55
-DEFECT_DETECTION_RESOLUTION = 0.55
+# Lowered from 0.55: thermal hotspots are detectable from typical overview
+# altitude (~30m d3 → resolution_quality ~0.45); the per-target quality
+# already encodes framing and standoff, so a per-pixel resolution gate of
+# ~0.40 is sufficient to filter out far/blurry shots without forcing the
+# agent to fly close just to detect a strong hotspot.
+DEFECT_DETECTION_RESOLUTION = 0.40
 
 
 def estimate_visible_targets(

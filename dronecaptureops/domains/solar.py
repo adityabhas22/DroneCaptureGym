@@ -23,14 +23,35 @@ from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.domains.base import DomainScenarioBuilder
 from dronecaptureops.generation.suites import SOLAR_SCENARIO_FAMILIES
 from dronecaptureops.simulation.weather import sample_weather
+from dronecaptureops.tasks.solar_tasks import (
+    DefectSpec,
+    SolarTaskSpec,
+    ViewpointSpec,
+    ZoneSpec,
+    get_solar_task,
+)
 
 
 class SolarScenarioBuilder(DomainScenarioBuilder):
-    """Build deterministic solar farm inspection scenarios."""
+    """Build deterministic solar farm inspection scenarios.
+
+    Two entry modes:
+      * task_id provided: deterministic mission from `SOLAR_TASKS[task_id]`
+        (hidden defects, weather, battery, max_steps, extra zones/viewpoints
+        are read from the spec).
+      * scenario_family provided (or seed-derived): legacy randomized path
+        used by the curriculum suites.
+    """
 
     domain = "solar"
 
-    def build(self, seed: int, episode_id: str | None = None, scenario_family: str | None = None) -> EpisodeWorld:
+    def build(
+        self,
+        seed: int,
+        episode_id: str | None = None,
+        scenario_family: str | None = None,
+        task_id: str | None = None,
+    ) -> EpisodeWorld:
         rng = random.Random(seed)
         family = scenario_family or _family_for_seed(seed)
         difficulty = _difficulty_for_seed(seed)
@@ -176,6 +197,31 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
         if family == "low_battery_tradeoff":
             telemetry.battery.level_pct = 68.0
             telemetry.battery_pct = 68.0
+
+        max_steps = DEFAULT_MAX_STEPS
+        obstacle_schedule_entries = _obstacle_schedule(family)
+
+        # If a task_id is provided, overlay deterministic task spec on top of
+        # the base scenario. The base assets/home/standoff bands stay; defects,
+        # weather, battery, and zones are replaced/augmented from the spec.
+        if task_id is not None:
+            task = get_solar_task(task_id)
+            mission = _mission_from_task(mission, task, weather)
+            hidden_defects = _hidden_defects_from_task(task)
+            weather = _apply_task_weather(weather, task)
+            telemetry.weather_band = weather.wind_band
+            telemetry.sync_legacy_fields()
+            telemetry.battery.level_pct = task.initial_battery_pct
+            telemetry.battery_pct = task.initial_battery_pct
+            airspace_zones.extend(_airspace_zones_from_task(task))
+            viewpoints.extend(_viewpoints_from_task(task))
+            max_steps = task.max_steps
+            mission.required_rows = list(task.required_rows)
+            mission.must_return_home = task.must_return_home
+            mission.min_battery_at_done_pct = task.min_battery_at_done_pct
+            mission.thermal_overview_required = task.thermal_overview_required
+            mission.rgb_closeup_for_anomalies = task.rgb_closeup_for_anomalies
+
         return EpisodeWorld(
             episode_id=episode_id or str(uuid.uuid4()),
             domain=self.domain,
@@ -202,13 +248,13 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
                 "irradiance_wm2": weather.irradiance_wm2,
                 "cloud_cover_oktas": weather.cloud_cover_oktas,
             },
-            obstacle_schedule=_obstacle_schedule(family),
+            obstacle_schedule=obstacle_schedule_entries,
             verifier_evidence_requirements=[
-                {"asset_id": row_id, "modality": "thermal", "quality_threshold": 0.55}
+                {"asset_id": row_id, "modality": "thermal", "quality_threshold": mission.min_capture_quality}
                 for row_id in row_ids
             ],
             weather=weather,
-            max_steps=DEFAULT_MAX_STEPS,
+            max_steps=max_steps,
         )
 
 
@@ -306,3 +352,110 @@ def _obstacle_schedule(family: str) -> list[dict]:
             "active_until_step": 30,
         }
     ]
+
+
+def _mission_from_task(base: MissionChecklist, task: SolarTaskSpec, weather: WeatherState) -> MissionChecklist:
+    """Layer task-spec fields onto a base mission checklist."""
+
+    return MissionChecklist(
+        mission_id=f"solar_{task.task_id}",
+        instruction=task.instruction,
+        required_rows=list(task.required_rows),
+        thermal_overview_required=task.thermal_overview_required,
+        rgb_closeup_for_anomalies=task.rgb_closeup_for_anomalies,
+        must_return_home=task.must_return_home,
+        min_battery_at_done_pct=task.min_battery_at_done_pct,
+        scenario_family=base.scenario_family,
+        difficulty=base.difficulty,
+        environmental_constraints=list(base.environmental_constraints) + list(task.public_constraints),
+        task_id=task.task_id,
+        task_name=task.name,
+        success_criteria=list(task.success_criteria),
+        public_constraints=list(task.public_constraints),
+        task_tags=list(task.task_tags),
+        min_capture_quality=task.min_capture_quality,
+        min_rgb_quality=task.min_rgb_quality,
+        min_report_grounding_score=task.min_report_grounding_score,
+        initial_battery_pct=task.initial_battery_pct,
+    )
+
+
+def _hidden_defects_from_task(task: SolarTaskSpec) -> list[HiddenDefect]:
+    """Convert deterministic DefectSpec entries into HiddenDefect objects.
+
+    Returns an empty list when the task spec sets `hidden_defects=()` (e.g.
+    `no_anomaly_clearance`). Returns the legacy randomized defects when the
+    spec leaves `hidden_defects=None`. Otherwise applies the task-specific
+    quality threshold so closeup/weather tasks scale the bar appropriately.
+    """
+
+    if task.hidden_defects is None:
+        return []  # task path always overrides; legacy path is taken when task_id is None
+    defects: list[HiddenDefect] = []
+    for spec in task.hidden_defects:
+        defects.append(
+            HiddenDefect(
+                defect_id=spec.defect_id,
+                target_id=spec.target_id,
+                defect_type=spec.defect_type,
+                severity=spec.severity,
+                min_quality=task.min_capture_quality,
+            )
+        )
+    return defects
+
+
+def _apply_task_weather(base: WeatherState, task: SolarTaskSpec) -> WeatherState:
+    """Override base weather fields with task-specific values when set."""
+
+    wind = task.weather_wind_mps if task.weather_wind_mps is not None else base.wind_mps
+    visibility = task.weather_visibility if task.weather_visibility is not None else base.visibility
+    return WeatherState(
+        wind_mps=wind,
+        visibility=visibility,
+        irradiance_wm2=base.irradiance_wm2,
+        cloud_cover_oktas=base.cloud_cover_oktas,
+        ambient_temp_c=base.ambient_temp_c,
+    )
+
+
+def _airspace_zones_from_task(task: SolarTaskSpec) -> list[AirspaceZone]:
+    """Convert task ZoneSpec entries to AirspaceZone objects."""
+
+    zones: list[AirspaceZone] = []
+    for spec in task.extra_zones:
+        zones.append(
+            AirspaceZone(
+                zone_id=spec.zone_id,
+                label=spec.label,
+                min_x=spec.min_x,
+                min_y=spec.min_y,
+                max_x=spec.max_x,
+                max_y=spec.max_y,
+                min_altitude_m=spec.min_altitude_m,
+                max_altitude_m=spec.max_altitude_m,
+                zone_type=spec.zone_type,  # type: ignore[arg-type]
+                constraint_level=spec.constraint_level,  # type: ignore[arg-type]
+                reason=spec.reason,
+            )
+        )
+    return zones
+
+
+def _viewpoints_from_task(task: SolarTaskSpec) -> list[Viewpoint]:
+    """Convert task ViewpointSpec entries to Viewpoint objects."""
+
+    viewpoints: list[Viewpoint] = []
+    for spec in task.extra_viewpoints:
+        viewpoints.append(
+            Viewpoint(
+                viewpoint_id=spec.viewpoint_id,
+                label=spec.label,
+                pose=Pose(x=spec.x, y=spec.y, z=spec.z, yaw_deg=spec.yaw_deg),
+                asset_ids=list(spec.asset_ids),
+                standoff_bucket=spec.standoff_bucket,  # type: ignore[arg-type]
+                suitable_modalities=list(spec.suitable_modalities),  # type: ignore[arg-type]
+                notes=list(spec.notes),
+            )
+        )
+    return viewpoints

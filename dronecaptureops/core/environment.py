@@ -47,15 +47,24 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         episode_id: str | None = None,
         domain: str = DEFAULT_DOMAIN,
         scenario_family: str | None = None,
+        task: str | None = None,
+        task_id: str | None = None,
         **_: Any,
     ) -> DroneObservation:
-        """Create a reproducible scenario and return the first observation."""
+        """Create a reproducible scenario and return the first observation.
 
+        Both `task` and `task_id` are accepted as aliases for the same
+        task-conditioned scenario selector. When neither is provided, the
+        legacy seed/scenario_family path is used.
+        """
+
+        resolved_task = task_id if task_id is not None else task
         self._world = self._scenario_generator.build(
             seed=DEFAULT_SEED if seed is None else seed,
             domain=domain,
             episode_id=episode_id,
             scenario_family=scenario_family,
+            task_id=resolved_task,
         )
         self._controller.reset(self._world)
         self._rewards.compute(self._world)
