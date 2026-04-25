@@ -254,8 +254,66 @@ class RewardAggregator:
             )
         )
         penalties += 0.02 * low_value_redundant
+        penalties += self._indiscriminate_citation_penalty(world)
         if world.done and world.mission.must_return_home and not world.checklist_status.returned_home:
             penalties += 0.20
         if world.final_report is not None and not world.final_report.photo_ids and not world.final_report.evidence and not world.final_report.issues_found:
             penalties += 0.05
         return penalties
+
+    def _indiscriminate_citation_penalty(self, world: EpisodeWorld) -> float:
+        """Penalize 'cite every photo' reports.
+
+        Counts cited captures that bring no new evidence (no new row coverage,
+        no new anomaly, no RGB context for a real defect, no quality
+        improvement over earlier captures of the same target). Triggers only
+        after submission and only when filler dominates. Capped at 0.10 so it
+        can't dominate outcome reward.
+        """
+
+        from dronecaptureops.rewards.verifiers import report_cited_photo_ids, reportable_defects
+
+        report = world.final_report
+        if report is None:
+            return 0.0
+        cited_ids = report_cited_photo_ids(report)
+        cited_captures = [capture for capture in world.capture_log if capture.photo_id in cited_ids]
+        if len(cited_captures) <= 3:
+            return 0.0
+        required = set(world.mission.required_rows)
+        reportable_targets = {defect.target_id for defect in reportable_defects(world)}
+        reportable_ids = {defect.defect_id for defect in reportable_defects(world)}
+        covered: set[str] = set()
+        detected: set[str] = set()
+        best_quality: dict[tuple[str, str], float] = {}
+        filler = 0
+        for capture in cited_captures:
+            new_rows = {
+                row for row in capture.targets_visible
+                if row in required and capture.sensor == "thermal"
+                and capture.target_quality(row) >= world.mission.min_capture_quality
+                and row not in covered
+            }
+            new_anomalies = {a for a in capture.detected_anomalies if a in reportable_ids and a not in detected}
+            rgb_context = (
+                capture.sensor == "rgb"
+                and bool(set(capture.targets_visible) & reportable_targets)
+            )
+            quality_jump = False
+            for target in capture.targets_visible:
+                key = (capture.sensor, target)
+                prior_best = best_quality.get(key, 0.0)
+                if capture.target_quality(target) > prior_best + 0.05:
+                    quality_jump = True
+                best_quality[key] = max(prior_best, capture.target_quality(target))
+            covered |= new_rows
+            detected |= new_anomalies
+            if not (new_rows or new_anomalies or rgb_context or quality_jump):
+                filler += 1
+        if filler == 0:
+            return 0.0
+        excess = max(0, len(cited_captures) - 3)
+        filler_ratio = filler / len(cited_captures)
+        if filler_ratio < 0.34:
+            return 0.0
+        return round(min(0.10, 0.02 * filler * filler_ratio + 0.005 * excess), 4)

@@ -55,10 +55,19 @@ class RolloutRunner:
         seed: int | None = None,
         scenario_family: str | None = None,
         max_steps: int | None = None,
+        task_id: str | None = None,
     ) -> RolloutResult:
-        """Run a policy through one episode and capture every transition."""
+        """Run a policy through one episode and capture every transition.
 
-        observation = self.env.reset(seed=seed, scenario_family=scenario_family)
+        When `task_id` is provided, the env is reset with task conditioning;
+        otherwise the legacy seed/scenario_family path is used.
+        """
+
+        observation = self.env.reset(
+            seed=seed,
+            scenario_family=scenario_family,
+            task_id=task_id,
+        )
         initial = observation.model_dump(mode="json")
         limit = max_steps or int(observation.state_summary.get("remaining_steps") or 40)
         trajectory: list[RolloutStep] = []

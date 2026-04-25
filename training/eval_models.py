@@ -43,7 +43,13 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from dronecaptureops.agent import RolloutResult, RolloutRunner
+from dronecaptureops.agent import RolloutResult, RolloutRunner, TaskOraclePolicy
+from dronecaptureops.agent.eval_metrics import (
+    CHECKPOINT_NAMES,
+    FAILURE_MODES,
+    aggregate_diagnostics,
+    trajectory_metrics,
+)
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
 from dronecaptureops.tasks.solar_tasks import SOLAR_TASKS
 
@@ -167,9 +173,23 @@ class EvalRow:
     parse_error_count: int
     safety_violations: list[str] = field(default_factory=list)
     final_status: dict[str, Any] = field(default_factory=dict)
+    # Diagnostic profile populated by trajectory_metrics():
+    failure_mode: str = "unknown"
+    checkpoints: dict[str, bool] = field(default_factory=dict)
+    tool_calls: dict[str, int] = field(default_factory=dict)
+    coverage: dict[str, Any] = field(default_factory=dict)
+    safety: dict[str, Any] = field(default_factory=dict)
+    reward_components: dict[str, float] = field(default_factory=dict)
+    oracle_comparison: dict[str, Any] = field(default_factory=dict)
 
 
-def _row_from_result(model: str, cell: EvalCell, result: RolloutResult) -> EvalRow:
+def _row_from_result(
+    model: str,
+    cell: EvalCell,
+    result: RolloutResult,
+    *,
+    oracle_result: RolloutResult | None = None,
+) -> EvalRow:
     final = result.final_observation
     checklist = final.get("checklist_status", {})
     parse_errors = sum(1 for step in result.trajectory if step.parse_error)
@@ -177,6 +197,7 @@ def _row_from_result(model: str, cell: EvalCell, result: RolloutResult) -> EvalR
         warning for warning in final.get("warnings", [])
         if "violation" in str(warning) or "unsafe" in str(warning)
     ]
+    metrics = trajectory_metrics(result, oracle_result=oracle_result)
     return EvalRow(
         model=model,
         task_id=cell.task_id,
@@ -188,11 +209,18 @@ def _row_from_result(model: str, cell: EvalCell, result: RolloutResult) -> EvalR
         parse_error_count=parse_errors,
         safety_violations=safety_violations,
         final_status=checklist,
+        failure_mode=metrics.failure_mode,
+        checkpoints=metrics.checkpoints,
+        tool_calls=metrics.tool_calls,
+        coverage=metrics.coverage,
+        safety=metrics.safety,
+        reward_components=metrics.reward_components,
+        oracle_comparison=metrics.oracle_comparison,
     )
 
 
 def aggregate(rows: list[EvalRow]) -> dict[str, Any]:
-    """Per-(model, task) summary + per-model summary."""
+    """Per-(model, task) summary + per-model summary + diagnostic profile."""
 
     by_model_task: dict[tuple[str, str], list[EvalRow]] = defaultdict(list)
     by_model: dict[str, list[EvalRow]] = defaultdict(list)
@@ -211,6 +239,7 @@ def aggregate(rows: list[EvalRow]) -> dict[str, Any]:
             "mean_reward": mean(r.total_reward for r in cell_rows),
             "mean_steps": mean(r.steps for r in cell_rows),
             "mean_parse_errors": mean(r.parse_error_count for r in cell_rows),
+            "failure_modes": _failure_mode_breakdown(cell_rows),
         }
 
     per_model = {}
@@ -224,23 +253,51 @@ def aggregate(rows: list[EvalRow]) -> dict[str, Any]:
             "mean_parse_errors": mean(r.parse_error_count for r in model_rows),
         }
 
-    return {"per_cell": per_cell, "per_model": per_model}
+    diagnostics = aggregate_diagnostics([_row_to_jsonable(row) for row in rows])
+
+    return {"per_cell": per_cell, "per_model": per_model, "diagnostics": diagnostics}
 
 
 def format_summary(summary: dict[str, Any], rows: list[EvalRow]) -> str:
-    """Render an aggregated table for stdout."""
+    """Render aggregated tables + diagnostic breakdowns for stdout."""
 
     lines: list[str] = []
     lines.append("\n=== per-model summary ===")
-    lines.append(f"{'model':<48} {'n':>4} {'success':>8} {'complete':>9} {'mean_r':>7} {'mean_steps':>11} {'parse_err':>10}")
+    lines.append(
+        f"{'model':<48} {'n':>4} {'success':>8} {'complete':>9} {'mean_r':>7} {'mean_steps':>11} {'parse_err':>10}"
+    )
     for model, agg in sorted(summary["per_model"].items()):
         lines.append(
             f"{model:<48} {agg['n']:>4} {agg['success_rate']:>8.2%} {agg['complete_rate']:>9.2%} "
             f"{agg['mean_reward']:>7.3f} {agg['mean_steps']:>11.1f} {agg['mean_parse_errors']:>10.2f}"
         )
 
+    lines.append("\n=== failure-mode distribution per model ===")
+    diagnostics = summary.get("diagnostics", {})
+    for model, agg in sorted(diagnostics.items()):
+        lines.append(f"\n  {model}:")
+        for mode, frac in sorted(agg["failure_mode_distribution"].items(), key=lambda kv: -kv[1]):
+            lines.append(f"    {mode:<24} {frac:>6.1%}")
+
+    lines.append("\n=== capability checkpoint completion rate per model ===")
+    for model, agg in sorted(diagnostics.items()):
+        lines.append(f"\n  {model}:")
+        for name in CHECKPOINT_NAMES:
+            rate = agg["checkpoint_completion_rate"].get(name, 0.0)
+            bar = "█" * int(rate * 20) + "·" * (20 - int(rate * 20))
+            lines.append(f"    {name:<24} {rate:>6.1%}  {bar}")
+
+    lines.append("\n=== mean tool calls per episode (top 10 per model) ===")
+    for model, agg in sorted(diagnostics.items()):
+        lines.append(f"\n  {model}:")
+        top_tools = list(agg["tool_calls_per_episode"].items())[:10]
+        for tool, mean_count in top_tools:
+            lines.append(f"    {tool:<32} {mean_count:>6.2f}")
+
     lines.append("\n=== per-(model, task) ===")
-    lines.append(f"{'model':<40} {'task_id':<28} {'n':>4} {'success':>8} {'complete':>9} {'mean_r':>7} {'mean_steps':>11}")
+    lines.append(
+        f"{'model':<40} {'task_id':<28} {'n':>4} {'success':>8} {'complete':>9} {'mean_r':>7} {'mean_steps':>11}"
+    )
     for key, agg in sorted(summary["per_cell"].items()):
         lines.append(
             f"{agg['model']:<40} {agg['task_id']:<28} {agg['n']:>4} "
@@ -248,6 +305,64 @@ def format_summary(summary: dict[str, Any], rows: list[EvalRow]) -> str:
             f"{agg['mean_reward']:>7.3f} {agg['mean_steps']:>11.1f}"
         )
     return "\n".join(lines)
+
+
+def _failure_mode_breakdown(rows: list[EvalRow]) -> dict[str, float]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.failure_mode] = counts.get(row.failure_mode, 0) + 1
+    n = len(rows)
+    return {mode: round(counts[mode] / n, 4) for mode in counts}
+
+
+def _precompute_oracle_refs(plan: list["EvalCell"]) -> dict[tuple[str, int], RolloutResult]:
+    """Run TaskOraclePolicy once per unique (task_id, seed) for comparison.
+
+    Cheap (no LLM); ~1s per task on CPU. Cached so each base-model rollout
+    of the same (task, seed) reuses the same oracle reference.
+    """
+
+    refs: dict[tuple[str, int], RolloutResult] = {}
+    seen: set[tuple[str, int]] = set()
+    for cell in plan:
+        key = (cell.task_id, cell.seed)
+        if key in seen:
+            continue
+        seen.add(key)
+        env = DroneCaptureOpsEnvironment()
+        runner = RolloutRunner(env=env)
+        try:
+            refs[key] = runner.run(
+                TaskOraclePolicy(task_id=cell.task_id),
+                seed=cell.seed,
+                task_id=cell.task_id,
+                max_steps=cell.max_steps,
+            )
+        except Exception as exc:  # noqa: BLE001 — never let oracle failure crash eval
+            LOG.warning("oracle reference failed for %s seed=%d: %s", cell.task_id, cell.seed, exc)
+    return refs
+
+
+def _row_to_jsonable(row: EvalRow) -> dict[str, Any]:
+    return {
+        "model": row.model,
+        "task_id": row.task_id,
+        "seed": row.seed,
+        "success": row.success,
+        "complete": row.complete,
+        "total_reward": row.total_reward,
+        "steps": row.steps,
+        "parse_error_count": row.parse_error_count,
+        "safety_violations": row.safety_violations,
+        "final_status": row.final_status,
+        "failure_mode": row.failure_mode,
+        "checkpoints": row.checkpoints,
+        "tool_calls": row.tool_calls,
+        "coverage": row.coverage,
+        "safety": row.safety,
+        "reward_components": row.reward_components,
+        "oracle_comparison": row.oracle_comparison,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +410,12 @@ def main() -> int:
     rows: list[EvalRow] = []
     started = time.time()
 
+    # Pre-compute oracle reference trajectories per (task_id, seed) — used
+    # for step-efficiency and tool-overlap metrics. The oracle is fast
+    # (~1s per task) and runs without any LLM, so this is cheap.
+    LOG.info("computing oracle reference trajectories for %d tasks", len(set(c.task_id for c in plan)))
+    oracle_refs = _precompute_oracle_refs(plan)
+
     # Group cells by model so we load each model exactly once.
     cells_by_model: dict[str, list[EvalCell]] = defaultdict(list)
     for cell in plan:
@@ -329,20 +450,10 @@ def main() -> int:
                         task_id=cell.task_id,
                         max_steps=cell.max_steps,
                     )
-                    row = _row_from_result(model, cell, result)
+                    oracle_ref = oracle_refs.get((cell.task_id, cell.seed))
+                    row = _row_from_result(model, cell, result, oracle_result=oracle_ref)
                     rows.append(row)
-                    handle.write(json.dumps({
-                        "model": row.model,
-                        "task_id": row.task_id,
-                        "seed": row.seed,
-                        "success": row.success,
-                        "complete": row.complete,
-                        "total_reward": row.total_reward,
-                        "steps": row.steps,
-                        "parse_error_count": row.parse_error_count,
-                        "safety_violations": row.safety_violations,
-                        "final_status": row.final_status,
-                    }, sort_keys=True) + "\n")
+                    handle.write(json.dumps(_row_to_jsonable(row), sort_keys=True) + "\n")
                     handle.flush()
             finally:
                 # vLLM holds a process-wide CUDA context; release it before

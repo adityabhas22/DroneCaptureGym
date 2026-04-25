@@ -101,11 +101,11 @@ class InspectionTools:
         The agent supplies a target_id and a list of photo_ids that justify
         the inspection. We accept the acknowledgement only when the cited
         photos exist, the target is visible in at least one of them, and
-        the per-target quality clears MIN_ROW_QUALITY for at least one
-        thermal photo.
+        the per-target quality clears the mission's thermal quality threshold
+        for at least one thermal photo.
         """
 
-        from dronecaptureops.rewards.verifiers import MIN_ROW_QUALITY  # local import to avoid cycle
+        from dronecaptureops.rewards.verifiers import thermal_quality_threshold  # local import to avoid cycle
 
         target_id = coerce_str(args, "target_id")
         cited_ids = coerce_str_list(args, "photo_ids")
@@ -113,12 +113,13 @@ class InspectionTools:
         unknown = [photo_id for photo_id in cited_ids if photo_id not in real_captures]
         cited = [photo_id for photo_id in cited_ids if photo_id in real_captures]
         target_known = any(asset.asset_id == target_id for asset in world.assets)
+        threshold = thermal_quality_threshold(world)
         thermal_evidence = [
             real_captures[photo_id]
             for photo_id in cited
             if real_captures[photo_id].sensor == "thermal"
             and target_id in real_captures[photo_id].targets_visible
-            and real_captures[photo_id].target_quality(target_id) >= MIN_ROW_QUALITY
+            and real_captures[photo_id].target_quality(target_id) >= threshold
         ]
         accepted = bool(target_known and thermal_evidence)
         if accepted and target_id not in world.checklist_status.targets_acknowledged:

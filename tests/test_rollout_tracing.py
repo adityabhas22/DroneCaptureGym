@@ -54,6 +54,38 @@ def test_suite_runner_aggregates_dynamic_reward_columns():
     assert "Reward Columns" in report.to_markdown()
 
 
+def test_trace_artifacts_include_diagnostic_layers():
+    """Issue #5: capture_table, reward_evolution, safety_timeline, final_report_diagnostics."""
+
+    rollout = RolloutRunner().run(
+        get_policy("scripted"),
+        seed=2101,
+        scenario_family="single_hotspot",
+        max_steps=30,
+    )
+    artifacts = build_trace_artifacts(rollout)
+
+    assert artifacts["capture_table"], "capture_table missing"
+    first_capture = artifacts["capture_table"][0]
+    assert {"photo_id", "sensor", "targets_visible", "quality_score", "cited_in_report"} <= set(first_capture)
+
+    assert artifacts["reward_evolution"], "reward_evolution missing"
+    first_reward = artifacts["reward_evolution"][0]
+    assert "components" in first_reward and "total" in first_reward["components"]
+
+    # Safety timeline can be empty when no violations occurred — list type still required.
+    assert isinstance(artifacts["safety_timeline"], list)
+
+    diagnostics = artifacts["final_report_diagnostics"]
+    assert {
+        "submitted",
+        "missing_cited_rows",
+        "fake_photo_ids_cited",
+        "low_quality_cited_photo_ids",
+        "integrity_warnings",
+    } <= set(diagnostics)
+
+
 def test_trace_state_changes_show_policy_steps():
     rollout = RolloutRunner().run(
         get_policy("scripted"),

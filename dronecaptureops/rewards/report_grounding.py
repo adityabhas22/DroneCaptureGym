@@ -6,12 +6,12 @@ from dronecaptureops.core.models import EvidenceReport
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.rewards.base import RewardComponent
 from dronecaptureops.rewards.verifiers import (
-    MIN_ROW_QUALITY,
     compute_integrity_gate,
     compute_issue_capture,
     compute_required_coverage,
     report_cited_photo_ids,
     reportable_defects,
+    thermal_quality_threshold,
 )
 
 
@@ -30,9 +30,10 @@ def validate_evidence_report(world: EpisodeWorld, report: EvidenceReport | None)
     fake_ids = cited_ids - real_ids
     if fake_ids:
         warnings.append(f"fake photo ids cited: {sorted(fake_ids)}")
+    quality_floor = thermal_quality_threshold(world)
     useful_cited = [
         capture for capture in world.capture_log
-        if capture.photo_id in cited_ids and capture.targets_visible and capture.quality_score >= MIN_ROW_QUALITY
+        if capture.photo_id in cited_ids and capture.targets_visible and capture.quality_score >= quality_floor
     ]
     reportable_ids = {defect.defect_id for defect in reportable_defects(world)}
     thermal_anomalies = {

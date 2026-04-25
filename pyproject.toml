@@ -29,6 +29,7 @@ server = "server.app:main"
 dronecaptureops-server = "server.app:main"
 dronecaptureops-run-suite = "training.run_suite:main"
 dronecaptureops-trace-episode = "training.trace_episode:main"
+dronecaptureops-run-benchmark = "training.run_benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["dronecaptureops*", "server*"]
