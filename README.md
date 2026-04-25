@@ -12,6 +12,7 @@ The benchmark focus is active visual inspection: deciding what evidence is missi
 - High-level tool registry with schema validation.
 - Safety wrapper before flight/gimbal actions.
 - Structured RGB/thermal capture-quality metadata.
+- DroneKit-inspired rich telemetry and generic inspection assets documented in [docs/environment-model-v2.md](docs/environment-model-v2.md).
 - Composable reward breakdown with safety gate and report-grounding checks.
 - Fast pytest coverage for reset, step, safety, rewards, scenario generation, and hidden-state protection.
 - Placeholder `DroneKitSITLController` adapter boundary for future ArduPilot / DroneKit work.

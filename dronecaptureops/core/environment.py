@@ -116,6 +116,8 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             domain=world.domain,
             scenario_seed=world.scenario_seed,
             telemetry=world.telemetry.model_copy(deep=True),
+            visible_assets=[asset.model_copy(deep=True) for asset in world.assets],
+            evidence_artifacts=[artifact.model_copy(deep=True) for artifact in world.evidence_artifacts],
             checklist_status=world.checklist_status.model_copy(deep=True),
             captures_taken=len(world.capture_log),
             safety_violations=list(world.safety_violations),
@@ -156,7 +158,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         return RawDroneAction(tool_name="invalid", arguments={})
 
     def _update_terminal_status(self, world: EpisodeWorld) -> None:
-        if world.telemetry.battery_pct <= 0.0:
+        if world.telemetry.battery.level_pct <= 0.0:
             world.done = True
             world.termination_reason = "battery_exhausted"
             world.safety_violations.append("battery_exhausted")
@@ -183,6 +185,10 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             telemetry=world.telemetry.model_copy(deep=True),
             mission=world.mission.model_copy(deep=True),
             site_map=world.visible_site_map(),
+            visible_assets=[asset.model_copy(deep=True) for asset in world.assets],
+            evidence_artifacts=[artifact.model_copy(deep=True) for artifact in world.evidence_artifacts],
+            warnings=self._visible_warnings(world),
+            state_summary=self._state_summary(world),
             last_capture=world.capture_log[-1].model_copy(deep=True) if world.capture_log else None,
             capture_log=[capture.model_copy(deep=True) for capture in world.capture_log],
             checklist_status=world.checklist_status.model_copy(deep=True),
@@ -196,3 +202,25 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
                 "termination_reason": world.termination_reason,
             },
         )
+
+    def _visible_warnings(self, world: EpisodeWorld) -> list[str]:
+        warnings: list[str] = []
+        if world.telemetry.weather_band == "high":
+            warnings.append("high wind band may reduce capture stability")
+        if world.telemetry.battery.level_pct < world.mission.min_battery_at_done_pct + 10.0:
+            warnings.append("battery reserve margin is low")
+        warnings.extend(world.safety_violations[-3:])
+        return warnings
+
+    def _state_summary(self, world: EpisodeWorld) -> dict[str, Any]:
+        return {
+            "mode": world.telemetry.autopilot.mode,
+            "armed": world.telemetry.autopilot.armed,
+            "battery_pct": world.telemetry.battery.level_pct,
+            "wind_band": world.telemetry.weather_band,
+            "visible_asset_count": len(world.assets),
+            "artifact_count": len(world.evidence_artifacts),
+            "remaining_steps": max(world.max_steps - world.step_count, 0),
+            "returned_home": world.checklist_status.returned_home,
+            "landed": world.checklist_status.landed,
+        }

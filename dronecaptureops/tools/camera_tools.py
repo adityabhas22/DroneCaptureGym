@@ -27,8 +27,11 @@ class CameraTools:
 
     def set_zoom(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         zoom_level = max(1.0, min(float(args["zoom_level"]), 4.0))
-        world.telemetry.mode = f"zoom_{zoom_level:g}x"
-        return {"zoom_level": zoom_level}
+        world.telemetry.camera.zoom_level = zoom_level
+        world.telemetry.autopilot.last_command = "set_zoom"
+        world.telemetry.autopilot.command_status = "completed"
+        world.telemetry.sync_legacy_fields()
+        return world.telemetry.camera.model_dump(mode="json")
 
     def capture_rgb(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         return self._capture(world, "rgb", args)
@@ -47,7 +50,7 @@ class CameraTools:
         sensor: SensorType = args.get("sensor", "thermal")
         estimate = estimate_visible_targets(
             telemetry=world.telemetry,
-            targets=world.targets,
+            targets=world.assets,
             sensor=sensor,
             weather=world.weather,
             hidden_defects=[],

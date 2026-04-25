@@ -13,3 +13,4 @@ def mark_return_status(world: EpisodeWorld) -> None:
     near_home = abs(pose.x - home.x) <= 1.0 and abs(pose.y - home.y) <= 1.0
     world.checklist_status.returned_home = near_home
     world.checklist_status.landed = world.telemetry.landed
+    world.telemetry.sync_legacy_fields()
