@@ -54,17 +54,29 @@ gradient_accumulation_steps: 16    # effective batch 16 — same as before
 gradient_checkpointing: true       # required at 16k seq on L40S
 
 # Eval + early stopping.
-# eval_steps=10 gives 3-4 evals per epoch on a ~200-example dataset, so
-# early_stopping_patience=3 has enough signal to converge. eval_steps=25
-# would fire only once per run, defeating early stopping entirely.
+# With ~1100 train examples / batch 16 = ~70 steps/epoch × 3 epochs = ~210
+# total steps, eval_steps=10 gives ~21 eval points — plenty of signal for
+# early-stopping patience=3 to converge.
 eval_strategy: steps
 eval_steps: 10
+# save_steps=20 = a save every other eval. Keeps the I/O budget reasonable
+# (each save = adapter+state checkpoint upload to Hub, ~30 sec) while still
+# allowing load_best_model_at_end to pull the best snapshot.
 save_strategy: steps
-save_steps: 10
+save_steps: 20
 load_best_model_at_end: true
 metric_for_best_model: eval_loss
 greater_is_better: false
 early_stopping_patience: 3      # stop if eval_loss stops improving for 3 evals
+
+# Hub checkpointing — pushes the LoRA adapter to the output repo on every
+# save_steps so progress is durable to job crashes. `hub_strategy: checkpoint`
+# keeps a single rolling checkpoint folder on the Hub (not a folder per
+# save), so we don't accumulate dozens of subfolders.
+# `hub_model_id` is set by the entrypoint to the user's --output-repo.
+push_to_hub: true
+hub_strategy: checkpoint
+hub_private_repo: true
 
 # LoRA. Default to Qwen-friendly target modules.
 lora:

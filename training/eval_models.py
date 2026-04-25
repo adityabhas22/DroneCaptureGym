@@ -179,6 +179,8 @@ def _make_hf_policy(
     max_retries: int,
     initial_backoff_s: float,
     request_timeout_s: float,
+    enable_thinking: bool = True,
+    use_meta_llama_client: bool = False,
 ):
     from dronecaptureops.agent import HFInferencePolicy  # type: ignore[attr-defined]
 
@@ -196,6 +198,8 @@ def _make_hf_policy(
         max_retries=max_retries,
         initial_backoff_s=initial_backoff_s,
         request_timeout_s=request_timeout_s,
+        enable_thinking=enable_thinking,
+        use_meta_llama_client=use_meta_llama_client,
     )
 
 
@@ -466,6 +470,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hf-initial-backoff-s", type=float, default=2.0)
     parser.add_argument("--hf-request-timeout-s", type=float, default=120.0)
     parser.add_argument("--no-tool-calls", action="store_true", help="Force JSON-text replies (skip native tool_calls).")
+    parser.add_argument(
+        "--no-think",
+        action="store_true",
+        help="For Qwen3 base variants: append `/no_think` to the system prompt to suppress <think> blocks. "
+             "Equivalent in effect to using an Instruct-2507 variant. Has no effect on non-reasoning models.",
+    )
+    parser.add_argument(
+        "--meta-llama-api",
+        action="store_true",
+        help="Route through Meta's api.llama.com (native shape, not OpenAI-compat). "
+             "Pair with --hf-base-url https://api.llama.com/v1 and a Meta API key.",
+    )
     # vLLM-specific
     parser.add_argument("--max-model-len", type=int, default=32768)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.85)
@@ -611,6 +627,8 @@ def _build_policy(args, model: str, env: DroneCaptureOpsEnvironment, cell: EvalC
             max_retries=args.hf_max_retries,
             initial_backoff_s=args.hf_initial_backoff_s,
             request_timeout_s=args.hf_request_timeout_s,
+            enable_thinking=not args.no_think,
+            use_meta_llama_client=args.meta_llama_api,
         )
     if args.provider == "offline":
         return _make_offline_policy(model, env, task_id=cell.task_id, seed=cell.seed)

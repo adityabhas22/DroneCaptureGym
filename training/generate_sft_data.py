@@ -193,10 +193,19 @@ def resolve_task_plans(config: SFTGenConfig) -> list[TaskPlan]:
 
 
 def build_policy(name: str, *, task_id: str, seed: int) -> Policy:
-    if name == "spec_aware_scripted":
-        # The spec-aware solver — solves all 45 tasks deterministically from
-        # task spec fields. Preferred reference policy for SFT data generation.
-        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed)
+    # `spec_aware_scripted_s{0,1,2}` selects between three valid solution
+    # paths in the spec-aware solver — careful, streamlined, diagnostic.
+    # Listing all three in the YAML's `policies:` rotation triples the
+    # action-sequence diversity per task, breaking the task_id → fixed-
+    # sequence shortcut the model would otherwise memorise.
+    if name == "spec_aware_scripted" or name == "spec_aware_scripted_s0":
+        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed, strategy=0)
+    if name == "spec_aware_scripted_s1":
+        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed, strategy=1)
+    if name == "spec_aware_scripted_s2":
+        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed, strategy=2)
+    if name == "spec_aware_scripted_s3":
+        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed, strategy=3)
     if name == "task_oracle":
         # Legacy oracle (only solves ~20 of 45 tasks). Kept for backward compat
         # with existing eval pipelines that pass it as a comparison baseline.

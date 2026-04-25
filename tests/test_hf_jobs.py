@@ -53,7 +53,15 @@ def test_build_job_spec_sft_defaults():
     # Default flavor is the cheap-iteration tier (L40S) for 4B-class workloads.
     assert spec.flavor == "l40sx1"
     assert spec.timeout == "2h"
-    assert spec.command == ["python", "-m", "training.hf_jobs.entrypoint", "sft"]
+    # Command is a bash bootstrap that downloads the repo tarball, extracts,
+    # cds in, then runs the entrypoint. Verify the structural shape and that
+    # the right job_type ends up at the tail of the embedded entrypoint call.
+    assert spec.command[0] == "bash"
+    assert spec.command[1] == "-lc"
+    bootstrap = spec.command[2]
+    assert "training.hf_jobs.entrypoint sft" in bootstrap
+    assert "code.tar.gz" in bootstrap
+    assert "DRONECAPTUREOPS_REPO_DATASET" in bootstrap
     # Both env names get the secret so legacy code paths work.
     assert spec.secrets == {"HF_TOKEN": "hf_fake", "HF_AUTH_TOKEN": "hf_fake"}
     # Critical env vars present.
@@ -67,7 +75,7 @@ def test_build_job_spec_sft_defaults():
     assert spec.labels["job_type"] == "sft"
 
 
-def test_build_job_spec_ppo_uses_longer_timeout():
+def test_build_job_spec_ppo_uses_longer_timeout_and_h200():
     spec = build_job_spec(
         job_type="ppo",
         repo_dataset_id="user/repo",
@@ -77,9 +85,14 @@ def test_build_job_spec_ppo_uses_longer_timeout():
         config_path_in_repo="training/configs/ppo_train_default.yaml",
         hf_token="hf_fake",
     )
-    # PPO timeout is longer than SFT (rollouts + value-head training).
-    assert spec.timeout == "6h"
-    assert spec.command[-1] == "ppo"
+    # PPO timeout is longer than SFT (7-10h rollouts + critic warmup + updates).
+    assert spec.timeout == "12h"
+    # PPO defaults to H200 (141 GB) — comfortable headroom for vLLM colocate
+    # + LoRA training + ref-disabled forward, none of which fits L40S 48 GB
+    # at 32k seqlen.
+    assert spec.flavor == "h200"
+    assert spec.command[0] == "bash"
+    assert "training.hf_jobs.entrypoint ppo" in spec.command[2]
 
 
 def test_build_job_spec_hardware_override():

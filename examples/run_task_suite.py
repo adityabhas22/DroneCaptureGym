@@ -86,11 +86,16 @@ STANDARD_RETURN_SOUTH = (0.0, -24.0, 18.0, 180.0)
 class _Solver:
     task_id: str
     seed: int = 7
-    # Strategy index — 0 (careful), 1 (streamlined), 2 (diagnostic). All three
-    # produce verifier-passing trajectories but vary tool usage and ordering
-    # so the SFT corpus has multiple valid action sequences per task. Tight-
-    # budget tasks gracefully fall back to strategy 0 when a variant doesn't
-    # fit the step cap. See `solve_task(..., strategy=...)`.
+    # Strategy index. All produce verifier-passing trajectories but vary
+    # tool usage, ordering, and (for s3) demonstrate failure recovery:
+    #   0 careful     — explicit set_camera_source, mark_target_inspected
+    #   1 streamlined — skip warm-up, row-position RGB, hover wait-strategy
+    #   2 diagnostic  — get_site_map, get_telemetry, list_assets, replan-first
+    #   3 recovery    — like s0 PLUS one injected env-error followed by the
+    #                    correct recovery action (teaches the model to read
+    #                    `obs.error` and emit a corrective tool call). Skipped
+    #                    on tight-budget tasks where the extra step doesn't fit.
+    # See `solve_task(..., strategy=...)`.
     strategy: int = 0
 
     env: DroneCaptureOpsEnvironment = field(init=False)
@@ -104,6 +109,7 @@ class _Solver:
     confirmed_targets: list[str] = field(default_factory=list, init=False)
     open_items: list[dict[str, Any]] = field(default_factory=list, init=False)
     submitted: bool = field(default=False, init=False)
+    _recovery_used: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         self.env = DroneCaptureOpsEnvironment()
@@ -114,7 +120,7 @@ class _Solver:
 
     @property
     def tight_budget(self) -> bool:
-        return self.spec.max_steps <= 22
+        return self.spec.max_steps <= 24
 
     @property
     def very_tight_budget(self) -> bool:
@@ -143,6 +149,13 @@ class _Solver:
     @property
     def viewpoints(self) -> dict[str, Any]:
         return {v.viewpoint_id: v for v in self.spec.extra_viewpoints}
+
+    def _has_zone_recovery_available(self) -> bool:
+        """True when the task has zones that will trigger more contextual
+        recovery patterns (obstacle/no_fly/privacy). Used by strategy 3 to
+        avoid stacking multiple recoveries in one episode."""
+
+        return bool(self.obstacle_zones or self.no_fly_zones or self.privacy_zones)
 
     def _zone_active_now(self, zone_id: str) -> bool:
         """Mirror `simulation.world.is_zone_active` exactly: inclusive bounds.
@@ -354,11 +367,38 @@ class _Solver:
     # --- phases --------------------------------------------------------------
 
     def _preflight(self) -> None:
-        if not self.tight_budget:
+        if self.tight_budget:
+            return
+        if self.strategy == 0:
+            # Careful: just the checklist.
             self._step(act("get_mission_checklist"))
+        elif self.strategy == 1:
+            # Streamlined: skip the checklist, the spec is in the prompt anyway.
+            return
+        else:  # strategy == 2 (diagnostic)
+            # Diagnostic: gather full state before flying.
+            self._step(act("get_mission_checklist"))
+            self._try_step(act("list_assets"))
 
     def _takeoff(self) -> None:
         self._step(act("takeoff", altitude_m=18))
+        # Strategy 2 (diagnostic) queries the env for the static site map and
+        # current telemetry right after takeoff. These are pure-information
+        # tools the model should know exist; we add them at low cost.
+        if self.strategy == 2 and not self.tight_budget and self._budget_left() >= 6:
+            self._try_step(act("get_site_map"))
+            self._try_step(act("get_telemetry"))
+        # Strategy 1 on scheduled-obstacle tasks: WAIT instead of detour.
+        # Calls `hover` until the latest scheduled obstacle's window expires.
+        # This demonstrates the wait alternative for time-bounded obstacles —
+        # without it the model has no prior on `hover` as a wait action.
+        if self.strategy == 1 and self.spec.obstacle_schedule and self._budget_left() >= 6:
+            latest_end = max(s.active_until_step for s in self.spec.obstacle_schedule)
+            wait_seconds = max(1, latest_end - self.steps_taken + 1)
+            # Cap waits so we don't burn step budget on long schedules.
+            if wait_seconds <= 10 and self._budget_left() >= wait_seconds + 6:
+                for _ in range(wait_seconds):
+                    self._try_step(act("hover", seconds=1))
 
     def _bypass_to_corridor(self) -> None:
         """Fly out of the home pad onto a safe east-west corridor.
@@ -538,8 +578,16 @@ class _Solver:
 
         Order: standard → spec-shipped alt viewpoints → far-north (30,32,22)
         → far-far-north (30,38,22) → request_route_replan recommendations.
-        We avoid spending a step on `request_route_replan` when a known-safe
-        alternative exists.
+
+        Strategy 2 (diagnostic) flips this: when the primary is blocked, it
+        calls `request_route_replan` FIRST before trying alternates. This
+        demonstrates the tool's natural "I'm blocked, ask for alternatives"
+        usage pattern — without it the model has zero prior on this tool.
+
+        Strategy 3 (recovery) explicitly attempts the blocked viewpoint FIRST
+        when it knows the standard is blocked, so the trajectory contains the
+        env error message. The corrective action that follows shows the model
+        the error→recovery pattern.
         """
 
         nx, ny, nz, nyaw = STANDARD_NORTH_OVERVIEW
@@ -553,6 +601,18 @@ class _Solver:
                 return
             self._capture_thermal_at(nx, ny, nz, nyaw, label=f"north thermal overview {sorted(row_ys)}")
             return
+
+        # 1b. Strategy 2: ask the env for alternatives FIRST when primary is blocked.
+        if self.strategy == 2 and self._budget_left() >= 5:
+            replan_ok = self._try_step(
+                act("request_route_replan", reason="primary north overview blocked; requesting safe alternatives")
+            )
+            if replan_ok:
+                recs = self.obs.action_result.get("recommended_viewpoints", []) if self.obs.action_result else []
+                alt = self._pick_thermal_alt(recs, prefer_north=True)
+                if alt is not None and not self._is_blocked(alt["x"], alt["y"], alt["z"]):
+                    self._capture_thermal_at(alt["x"], alt["y"], alt["z"], alt["yaw_deg"], label="north thermal via replan recommendation")
+                    return
 
         # 2. Spec-shipped alternates (cheap — no replan step needed).
         for vp_id in ("vp_block_b_north_alt_edge", "vp_row_b8_north_edge_thermal", "vp_far_north_corridor"):
@@ -607,6 +667,8 @@ class _Solver:
         materials_obstacle_south (compound_safety_corridor) blocks the standard
         (30, -24, 22) pose; we substitute (30, -30, 24) with a slightly
         shallower pitch so the FOV still covers B4-B6.
+
+        Strategy 2 (diagnostic) calls `request_route_replan` first when blocked.
         """
 
         sx, sy, sz, syaw = STANDARD_SOUTH_OVERVIEW
@@ -614,6 +676,18 @@ class _Solver:
         if not self._is_blocked(sx, sy, sz):
             self._capture_thermal_at(sx, sy, sz, syaw, label=f"south thermal overview {sorted(row_ys)}")
             return
+
+        # 1b. Strategy 2: ask env for alternatives first.
+        if self.strategy == 2 and self._budget_left() >= 5:
+            replan_ok = self._try_step(
+                act("request_route_replan", reason="primary south overview blocked; requesting safe alternatives")
+            )
+            if replan_ok:
+                recs = self.obs.action_result.get("recommended_viewpoints", []) if self.obs.action_result else []
+                alt = self._pick_thermal_alt(recs, prefer_north=False)
+                if alt is not None and not self._is_blocked(alt["x"], alt["y"], alt["z"]):
+                    self._capture_thermal_at(alt["x"], alt["y"], alt["z"], alt["yaw_deg"], label="south thermal via replan recommendation")
+                    return
 
         # 2. Blocked — try several known-safe south alternates.
         for cand in [
@@ -641,6 +715,28 @@ class _Solver:
         ok = self._safe_fly_to(x, y, z, yaw_deg)
         if not ok:
             return
+        # Strategy 0 (careful) explicitly switches the camera source — the
+        # capture tool would auto-set it, but the explicit pattern is what a
+        # cautious operator would emit and what the model should learn.
+        # Skipped on tight-budget tasks where the extra step costs too much.
+        if self.strategy == 0 and not self.tight_budget:
+            self._try_step(act("set_camera_source", source="thermal"))
+        # Strategy 3 (recovery) demonstrates the env's "invalid argument" error
+        # path before each thermal capture: try set_gimbal(pitch=-120) which
+        # the env rejects (out of valid range). The env returns an error like
+        # `invalid_gimbal_pitch:-120.0`, the drone state doesn't change, and
+        # the next set_gimbal succeeds. This is a SAFE failure (no safety
+        # violation, no zone violation) that teaches the model to read
+        # `obs.error` and retry with valid arguments. Triggers only ONCE per
+        # episode and only on non-tight tasks where the extra step fits.
+        if (
+            self.strategy == 3
+            and not self.tight_budget
+            and not self._recovery_used
+            and self._budget_left() >= 6
+        ):
+            self._try_step(act("set_gimbal", pitch_deg=-120.0, yaw_deg=0))
+            self._recovery_used = True
         self._step(act("set_gimbal", pitch_deg=pitch, yaw_deg=0))
         obs = self._step(act("capture_thermal", label=label))
         if obs.last_capture is None:
@@ -733,12 +829,23 @@ class _Solver:
         if not anomalies:
             return
 
-        # Map anomaly_id → defect for severity-weighted ordering.
+        # Map anomaly_id → defect. Strategy 1 walks anomalies in row-position
+        # order (B4→B5→…→B8) — geographically efficient. Strategies 0 and 2
+        # use severity-weighted (heaviest defect first) so the most important
+        # confirmation gets priority if the budget tightens later.
         defect_by_id = {d.defect_id: d for d in (self.spec.hidden_defects or [])}
-        anomalies_sorted = sorted(
-            anomalies,
-            key=lambda a: -defect_by_id.get(a, _StubDefect()).weight,
-        )
+        target_map_local = self.obs.checklist_status.anomaly_targets
+        if self.strategy == 1:
+            def _row_key(anomaly_id: str) -> float:
+                tid = target_map_local.get(anomaly_id, "")
+                y = self._row_y(tid)
+                return y if y is not None else 0.0
+            anomalies_sorted = sorted(anomalies, key=_row_key)
+        else:
+            anomalies_sorted = sorted(
+                anomalies,
+                key=lambda a: -defect_by_id.get(a, _StubDefect()).weight,
+            )
 
         target_map = self.obs.checklist_status.anomaly_targets
         for anomaly in anomalies_sorted:
@@ -774,6 +881,12 @@ class _Solver:
             ok = self._capture_rgb_for_target(target_id, target_y, anomaly)
             if ok:
                 self.confirmed_targets.append(target_id)
+                # Strategies 0 (careful) and 2 (diagnostic) explicitly mark
+                # the target as inspected — canonical way to signal "I'm done
+                # with this target." Skipped on tight-budget tasks where the
+                # extra step would push us past max_steps.
+                if self.strategy in (0, 2) and not self.tight_budget:
+                    self._try_step(act("mark_target_inspected", target_id=target_id))
             else:
                 self.open_items.append({
                     "anomaly_id": anomaly,
@@ -797,6 +910,9 @@ class _Solver:
 
         if not self._safe_fly_to(close_x, close_y, close_z, 180.0):
             return self._capture_rgb_zoom_fallback(target_id, target_y, anomaly_label)
+        # Strategy 0 explicitly sets RGB source before capture (skipped tight).
+        if self.strategy == 0 and not self.tight_budget:
+            self._try_step(act("set_camera_source", source="rgb"))
         self._step(act("set_gimbal", pitch_deg=-45, yaw_deg=0))
 
         # zoom_required_long_standoff explicitly needs zoom (the close pose
@@ -860,6 +976,12 @@ class _Solver:
         line. The staging detour is only needed when our current pose's
         segment to (0, 0, current_z) crosses a hard zone.
         """
+
+        # Strategy 2 (diagnostic) makes a `estimate_return_margin` call before
+        # returning — this teaches the model the tool exists in the right
+        # context. We skip it under tight budgets to preserve the step budget.
+        if self.strategy == 2 and not self.tight_budget and self._budget_left() >= 4:
+            self._try_step(act("estimate_return_margin"))
 
         pose = self.obs.telemetry.pose
         z = pose.z
@@ -951,22 +1073,54 @@ class _Solver:
             "photo_ids": thermal_ids,
         }]
 
-        # Summary text — prevents indiscriminate-issue heuristics from misfiring.
-        if issues_found:
-            confirmed_ids = ", ".join(i["issue_id"] for i in issues_found)
-            summary = (
-                f"Inspected required rows {sorted(self.spec.required_rows)} "
-                f"with thermal overviews and confirmed anomalies: {confirmed_ids}."
-            )
-        else:
-            summary = (
-                f"Inspected required rows {sorted(self.spec.required_rows)} "
-                "with thermal overviews; no reportable thermal anomalies confirmed."
-            )
-        if self.open_items:
-            summary += f" Honest open items: {len(self.open_items)} item(s) deferred."
+        # Summary text — three phrasings, one per strategy. All convey the
+        # same factual content (rows covered, anomalies confirmed, open items)
+        # without making fake claims; the integrity gate's heuristics tolerate
+        # any of these. Variation prevents the model from memorising one
+        # exact summary template.
+        rows_str = ", ".join(sorted(self.spec.required_rows))
+        confirmed_ids = ", ".join(i["issue_id"] for i in issues_found)
+        n_open = len(self.open_items)
+        battery_pct = round(self.obs.telemetry.battery.level_pct, 1) if self.obs.telemetry else 0.0
 
-        safety_notes = ["Returned home with battery reserve."] if self.spec.must_return_home else []
+        if self.strategy == 0:
+            # Careful — current verbose phrasing.
+            if issues_found:
+                summary = f"Inspected required rows {rows_str} with thermal overviews and confirmed anomalies: {confirmed_ids}."
+            else:
+                summary = f"Inspected required rows {rows_str} with thermal overviews; no reportable thermal anomalies confirmed."
+            if n_open:
+                summary += f" Honest open items: {n_open} item(s) deferred."
+            safety_notes = ["Returned home with battery reserve."] if self.spec.must_return_home else []
+        elif self.strategy == 1:
+            # Streamlined — operations log style.
+            parts = [f"Coverage: {rows_str}."]
+            if issues_found:
+                parts.append(f"Confirmed: {confirmed_ids}.")
+            else:
+                parts.append("No anomalies confirmed.")
+            if n_open:
+                parts.append(f"Open items: {n_open}.")
+            parts.append(f"Battery on submit: {battery_pct}%.")
+            summary = " ".join(parts)
+            safety_notes = [f"Returned home, battery {battery_pct}%."] if self.spec.must_return_home else []
+        else:
+            # Diagnostic — narrative-style detailed report.
+            sentences = [
+                f"Mission complete on solar block B with {len(self.obs.capture_log)} captures total.",
+            ]
+            if issues_found:
+                sentences.append(f"Thermal sweep of rows {rows_str} confirmed {len(issues_found)} reportable issue(s): {confirmed_ids}.")
+            else:
+                sentences.append(f"Thermal sweep of rows {rows_str} returned clean.")
+            if n_open:
+                sentences.append(f"{n_open} target(s) deferred to follow-up; see open_items.")
+            sentences.append(f"Drone returned and landed; battery reserve {battery_pct}%.")
+            summary = " ".join(sentences)
+            safety_notes = (
+                [f"Returned home and landed with {battery_pct}% battery reserve."]
+                if self.spec.must_return_home else []
+            )
 
         result = self.env.step(
             act(
@@ -997,16 +1151,21 @@ class _StubDefect:
 # ---------------------------------------------------------------------------
 
 
-def solve_task(task_id: str, seed: int = 7) -> DroneObservation:
-    """Run the spec-aware solver to completion. Returns the final observation."""
+def solve_task(task_id: str, seed: int = 7, strategy: int = 0) -> DroneObservation:
+    """Run the spec-aware solver to completion. Returns the final observation.
 
-    return _Solver(task_id=task_id, seed=seed).solve()
+    `strategy` ∈ {0, 1, 2} selects between three valid solution paths so
+    SFT data has multiple action sequences per task instead of one
+    memorisable template. All strategies are verifier-passing.
+    """
+
+    return _Solver(task_id=task_id, seed=seed, strategy=strategy).solve()
 
 
-def solve_task_actions(task_id: str, seed: int = 7) -> tuple[list[RawDroneAction], DroneObservation]:
+def solve_task_actions(task_id: str, seed: int = 7, strategy: int = 0) -> tuple[list[RawDroneAction], DroneObservation]:
     """Run the solver and capture the action sequence (used by Policy wrapper)."""
 
-    solver = _Solver(task_id=task_id, seed=seed)
+    solver = _Solver(task_id=task_id, seed=seed, strategy=strategy)
     # Patch env.step to record actions.
     original_step = solver.env.step
     actions: list[RawDroneAction] = []

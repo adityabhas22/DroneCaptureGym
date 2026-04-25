@@ -46,7 +46,18 @@ LOG = logging.getLogger("dronecaptureops.agent.hf")
 
 HF_DEFAULT_BASE_URL = "https://router.huggingface.co/v1"
 RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504, 524}
-LOADING_HINTS = ("currently loading", "is loading", "model is loading", "warming up")
+# Substrings (case-insensitive) that indicate a transient model-availability
+# issue — treat as retryable regardless of the HTTP status code. Different
+# providers surface this with different status codes and phrasings:
+# - HF Inference router: 503 + "model is loading"
+# - Meta api.llama.com: 400 + "model you are trying to access is not available
+#   ... your model has been reaped ... model tier is currently unhealthy"
+# - Some routers return 503 + "warming up"
+LOADING_HINTS = (
+    "currently loading", "is loading", "model is loading", "warming up",
+    "is not available", "has not deployed", "currently unhealthy",
+    "has been reaped", "model is unloaded", "click the 'reload' button",
+)
 
 
 @dataclass
@@ -103,10 +114,22 @@ class HFInferencePolicy(_LLMPolicyBase):
     max_backoff_s: float = 60.0
     request_timeout_s: float = 120.0
     record_turns: bool = True
+    # Reasoning-mode control. `True` is the model's default behaviour; set
+    # `False` for Qwen3 base variants (no `Instruct-2507` suffix) to suppress
+    # `<think>` blocks via the `/no_think` directive — needed because
+    # `chat_template_kwargs={"enable_thinking": False}` is rejected by some
+    # HF router providers. The directive is in-prompt and works regardless
+    # of provider routing. Has no effect on non-reasoning models.
+    enable_thinking: bool = True
+    # When True, route requests through `MetaLlamaClient` (api.llama.com's
+    # native response shape) instead of the OpenAI-compatible client. The
+    # rest of the policy is unchanged — the adapter mimics openai.OpenAI.
+    use_meta_llama_client: bool = False
     name: str = "hf"
     turns: list[HFInferenceTurnRecord] = field(default_factory=list, init=False)
     _client: Any = field(default=None, init=False)
     _tool_schemas: list[dict[str, Any]] = field(default_factory=list, init=False)
+    _system_directive_applied: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
         try:
@@ -130,17 +153,33 @@ class HFInferencePolicy(_LLMPolicyBase):
 
         from dronecaptureops.agent.schemas import openai_tool_schemas
 
-        self._client = OpenAI(
-            base_url=self.api_base_url,
-            api_key=api_key,
-            timeout=self.request_timeout_s,
-        )
+        if self.use_meta_llama_client:
+            from dronecaptureops.agent.meta_llama_client import MetaLlamaClient
+            self._client = MetaLlamaClient(
+                api_key=api_key,
+                base_url=self.api_base_url,
+                timeout=self.request_timeout_s,
+            )
+        else:
+            self._client = OpenAI(
+                base_url=self.api_base_url,
+                api_key=api_key,
+                timeout=self.request_timeout_s,
+            )
         self._tool_schemas = openai_tool_schemas(self.env._tools)  # noqa: SLF001
 
     # --- Policy protocol -----------------------------------------------------
 
     def next_action(self, observation: DroneObservation, context: AgentContext) -> RawDroneAction:
         self._ensure_initialised()
+        # Inject the `/no_think` directive into the system message exactly once
+        # per episode. Qwen3 reads this from the system prompt and skips the
+        # `<think>` block. Provider-agnostic — works regardless of HF routing.
+        if not self.enable_thinking and not self._system_directive_applied and self._messages:
+            sys_msg = self._messages[0]
+            if isinstance(sys_msg, dict) and sys_msg.get("role") == "system":
+                sys_msg["content"] = (sys_msg.get("content") or "") + "\n\n/no_think"
+            self._system_directive_applied = True
         is_initial = len(self._messages) == 1
         from dronecaptureops.agent.messages import build_user_message
 
@@ -398,11 +437,19 @@ def _serialise_api_error(exc: Exception) -> dict[str, Any]:
     # OpenAI BadRequestError exposes `body` as a dict with provider-specific keys.
     body = getattr(exc, "body", None)
     if isinstance(body, dict):
-        err = body.get("error", body) if isinstance(body.get("error"), dict) else body
+        # Three shapes seen in the wild:
+        #  - OpenAI:  {"error": {"message", "code", "type", "param", ...}}
+        #  - HF router: same as OpenAI plus "failed_generation"
+        #  - Meta api.llama.com: {"title", "detail", "status"} (top-level)
+        err = body.get("error") if isinstance(body.get("error"), dict) else None
         if isinstance(err, dict):
             for key in ("message", "code", "type", "failed_generation", "param"):
                 if key in err:
                     info[key] = err[key]
+        # Always also try Meta's top-level shape so we capture detail/title.
+        for key in ("detail", "title", "status"):
+            if key in body and key not in info:
+                info[key] = body[key]
     return info
 
 

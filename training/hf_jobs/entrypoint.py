@@ -103,9 +103,12 @@ def _download_dataset(token: str, dataset_repo_id: str, target_dir: Path) -> Pat
 # ---------------------------------------------------------------------------
 
 
-def _pip_install_repo(repo_dir: Path) -> None:
-    LOG.info("installing repo deps via pip install -e .[train]")
-    cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-e", ".[train]"]
+def _pip_install_repo(repo_dir: Path, *, job_type: str) -> None:
+    """Install repo deps. PPO needs the [ppo] extra (vllm); SFT just [train]."""
+
+    extra = "ppo" if job_type == "ppo" else "train"
+    LOG.info("installing repo deps via pip install -e .[%s]", extra)
+    cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir", "-e", f".[{extra}]"]
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
 
@@ -114,8 +117,13 @@ def _pip_install_repo(repo_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_sft_trainer(*, repo_dir: Path, base_model: str, config_path: str, dataset_path: Path, output_dir: Path) -> None:
-    """Invoke training/sft_warmstart.py with the passed-in overrides."""
+def _run_sft_trainer(*, repo_dir: Path, base_model: str, config_path: str, dataset_path: Path, output_dir: Path, output_repo: str) -> None:
+    """Invoke training/sft_warmstart.py with the passed-in overrides.
+
+    `output_repo` is the user's --output-repo from the launcher; we pass it
+    to the trainer as `--hub-model-id` so each save_step pushes the LoRA
+    adapter to that repo and progress survives job crashes mid-training.
+    """
 
     output_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -130,20 +138,28 @@ def _run_sft_trainer(*, repo_dir: Path, base_model: str, config_path: str, datas
         str(dataset_path),
         "--output-dir",
         str(output_dir),
+        "--hub-model-id",
+        output_repo,
     ]
     LOG.info("running SFT trainer: %s", " ".join(cmd))
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
 
 def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, output_dir: Path) -> None:
-    """Placeholder — wires up to training/train_ppo.py once that exists."""
+    """Run training.train_ppo with the in-job paths and base model.
+
+    The PPO trainer reads the SFT checkpoint location from its YAML
+    config (sft_checkpoint: artifacts/sft-checkpoints/final by default);
+    if you need to override it, expose it via DRONECAPTUREOPS_SFT_CKPT
+    and the launcher will pass --sft-checkpoint accordingly.
+    """
 
     output_dir.mkdir(parents=True, exist_ok=True)
     train_ppo = repo_dir / "training" / "train_ppo.py"
     if not train_ppo.exists():
         raise SystemExit(
-            "training/train_ppo.py is not implemented yet. "
-            "PPO entrypoint plumbing is ready; the trainer itself is the next deliverable."
+            "training/train_ppo.py is missing from the repo snapshot — "
+            "verify the launcher packaged the latest revision."
         )
     cmd = [
         sys.executable,
@@ -156,6 +172,14 @@ def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, outpu
         "--output-dir",
         str(output_dir),
     ]
+    sft_override = os.environ.get("DRONECAPTUREOPS_SFT_CKPT")
+    if sft_override:
+        cmd.extend(["--sft-checkpoint", sft_override])
+    if os.environ.get("DRONECAPTUREOPS_WANDB_MODE"):
+        cmd.extend(["--wandb-mode", os.environ["DRONECAPTUREOPS_WANDB_MODE"]])
+    if os.environ.get("DRONECAPTUREOPS_WANDB_RUN_NAME"):
+        cmd.extend(["--wandb-run-name", os.environ["DRONECAPTUREOPS_WANDB_RUN_NAME"]])
+
     LOG.info("running PPO trainer: %s", " ".join(cmd))
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
@@ -213,13 +237,24 @@ def main() -> int:
     git_rev = os.environ.get("DRONECAPTUREOPS_GIT_REV", "unknown")
     LOG.info("starting %s job (rev=%s, model=%s)", args.job_type, git_rev, base_model)
 
-    # Clean slate so retries are idempotent on the same container.
-    if WORK_ROOT.exists():
-        shutil.rmtree(WORK_ROOT, ignore_errors=True)
-    WORK_ROOT.mkdir(parents=True, exist_ok=True)
+    # If the bootstrap shell already downloaded and extracted the repo into
+    # CWD, reuse it instead of downloading again. Detect by the presence of
+    # the same package layout. Falls back to the canonical download flow
+    # (used by older bootstraps that didn't pre-fetch the repo).
+    cwd = Path.cwd()
+    if (cwd / "dronecaptureops" / "__init__.py").exists() and (cwd / "training" / "hf_jobs" / "entrypoint.py").exists():
+        LOG.info("reusing pre-downloaded repo at %s (bootstrap pre-fetched)", cwd)
+        repo_dir = cwd
+        # Make sure WORK_ROOT exists for downstream paths (data dataset, output).
+        WORK_ROOT.mkdir(parents=True, exist_ok=True)
+    else:
+        # Clean slate so retries are idempotent on the same container.
+        if WORK_ROOT.exists():
+            shutil.rmtree(WORK_ROOT, ignore_errors=True)
+        WORK_ROOT.mkdir(parents=True, exist_ok=True)
+        repo_dir = _download_repo(token, repo_dataset)
 
-    repo_dir = _download_repo(token, repo_dataset)
-    _pip_install_repo(repo_dir)
+    _pip_install_repo(repo_dir, job_type=args.job_type)
 
     output_dir = WORK_ROOT / "output"
     if args.job_type == "sft":
@@ -233,6 +268,7 @@ def main() -> int:
             config_path=config_path,
             dataset_path=dataset_path,
             output_dir=output_dir,
+            output_repo=output_repo,
         )
     else:
         _run_ppo_trainer(

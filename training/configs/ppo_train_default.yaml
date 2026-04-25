@@ -1,0 +1,116 @@
+# PPO trainer config — H200 single-GPU defaults.
+#
+# Hyperparameter sources, in case you need to retune:
+#   - actor_lr 1e-5 (LoRA), critic_lr 1e-5: 10x ratio per Practitioner's Guide
+#     to Multi-turn Agentic RL (arxiv 2510.01132, Table 10) and Turn-PPO
+#     (arxiv 2512.17008).
+#   - kl_coef 0.01 (loss-side, k3 estimator): same papers' top config for
+#     dense-reward biased PPO; protects against entropy collapse.
+#   - gamma 0.99, lam 0.95: token-level GAE for ~40-step horizons.
+#     SkyRL's defaults of 1.0/1.0 are wrong for our episode length.
+#   - LoRA r=64, alpha=32, target=all-linear: continuation of SFT
+#     adapter geometry; matches verl's qwen-32b LoRA recipe at smaller
+#     rank since we're on 3-7B.
+#   - format_penalty -0.05: per-turn penalty on parse errors; small
+#     enough not to dominate dense reward, large enough to prevent
+#     format breakage (Process Reward Models for LLM Agents, arxiv
+#     2502.10325).
+
+# Model + tokenizer
+model_name: Qwen/Qwen2.5-3B-Instruct
+tokenizer_name: null
+sft_checkpoint: artifacts/sft-checkpoints/final
+output_dir: artifacts/ppo-checkpoints
+
+# Sequence shape — 32k holds 40 turns × ~800 tokens/turn comfortably.
+max_prompt_length: 8192
+max_total_length: 32768
+pad_to_multiple_of: 8
+
+# Update shape
+ppo_epochs: 2          # Practitioner's Guide uses 1; we use 2 for sample efficiency.
+minibatch_size: 4
+micro_batch_size: 1    # bumps gradient accumulation; needed to fit 32k seq on H200.
+total_steps: 100       # 7-10 GPU-hour budget at this batch fits ~100-150 steps.
+save_interval_steps: 25
+log_interval_steps: 1
+
+# vLLM colocate. gpu_mem 0.4 leaves ~85GB on H200 for training (model +
+# optimizer + activations + ref-disabled-adapter forward).
+vllm_gpu_memory_utilization: 0.4
+vllm_max_model_len: 32768
+vllm_dtype: bfloat16
+vllm_enforce_eager: false
+vllm_lora_dir: artifacts/ppo-lora-cache
+
+# LoRA — actor only; value head is full-FT (it's tiny).
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+# Optimizer
+optimizer:
+  actor_lr: 1.0e-5
+  critic_lr: 1.0e-5
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 10
+  scheduler: cosine
+
+# Algorithm
+algorithm:
+  gamma: 0.99
+  lam: 0.95
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  value_clip: 0.2
+  dual_clip_c: null      # set to 3.0 if we see policy-loss explosions on neg advantages
+  kl_coef: 0.01
+  kl_estimator: k3
+  entropy_coef: 0.001
+  whiten_advantages: true
+
+# Rollouts per PPO step
+rollout:
+  rollout_batch_size: 16
+  max_workers: 16
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens_per_turn: 1024
+  max_episode_steps: 40
+  max_history_steps: 24
+
+# Critic warmup — pure value regression on SFT rollouts before PPO begins.
+# Costs ~5% of total compute, prevents the critic from giving garbage
+# advantages during the first 1k PPO steps.
+critic_warmup:
+  enabled: true
+  steps: 50              # tune up for noisier reward shapes
+  lr_multiplier: 5.0     # 5x the actor_lr during warmup only
+
+# Held-out eval (run async every N PPO steps)
+eval:
+  enabled: true
+  interval_steps: 25
+  held_out_tasks:
+    - scheduled_crane_window_wait_or_detour
+    - honest_partial_report_open_items
+    - strict_severity_weighted_triage
+    - edge_row_quality_bar
+    - privacy_safe_alternate_evidence
+    - return_margin_decision_point
+    - route_replan_when_primary_viewpoint_blocked
+  seeds_per_task: 3
+  max_episode_steps: 40
+
+# Tasks — null = all SOLAR_TASKS minus held-out
+train_tasks: null
+seed: 42
+
+# Wandb (set wandb_mode=online and WANDB_API_KEY to enable)
+wandb_project: dronecaptureops-ppo
+wandb_run_name: null
+wandb_mode: disabled

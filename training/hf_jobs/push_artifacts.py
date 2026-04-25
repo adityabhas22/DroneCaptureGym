@@ -54,6 +54,12 @@ def repo_tarball_bytes(repo_root: Path, *, exclude: Iterable[str] | None = None)
         name = Path(tarinfo.name).parts
         if any(part in excluded for part in name):
             return None
+        # Exclude ANY directory whose top-level component begins with `.venv`
+        # (catches `.venv-py310-test`, `.venv-cu121`, etc) or `venv-*`. Without
+        # this, an ad-hoc test venv added to the repo root will bloat the
+        # tarball by ~1 GB and silently hang the launcher's upload step.
+        if any(p.startswith(".venv") or p.startswith("venv-") for p in name):
+            return None
         if tarinfo.name.endswith(".pyc") or tarinfo.name.endswith(".pid"):
             return None
         if tarinfo.name.endswith(".env") or "/.env." in tarinfo.name:

@@ -33,23 +33,32 @@ from dronecaptureops.core.models import DroneObservation, RawDroneAction
 class SpecAwareScriptedPolicy:
     """Replay the spec-aware solver's actions one-per-step.
 
-    Pass `task_id` so the policy knows which task to solve. `seed` is
-    optional — if omitted, the runner's seed is used (read from
-    `context.history` is not possible, so seed must come from the caller).
+    Pass `task_id` so the policy knows which task to solve. `seed` selects
+    the env world; `strategy` ∈ {0, 1, 2} selects between alternate valid
+    solution paths so the SFT corpus has multiple action sequences per task
+    rather than one memorisable template.
     """
 
     task_id: str
     seed: int = 0
+    strategy: int = 0
     name: str = "spec_aware_scripted"
     _actions: list[RawDroneAction] = field(default_factory=list, init=False)
     _cursor: int = field(default=0, init=False)
     _initialised: bool = field(default=False, init=False)
 
+    def __post_init__(self) -> None:
+        # Encode strategy in the policy name so generated trajectories are
+        # tagged with which solution path produced them (visible in SFT JSONL).
+        self.name = f"spec_aware_scripted_s{self.strategy}"
+
     def _initialise(self) -> None:
         # Local import to avoid a hard dependency on `examples/` at import time.
         from examples.run_task_suite import solve_task_actions
 
-        self._actions, _ = solve_task_actions(self.task_id, seed=self.seed)
+        self._actions, _ = solve_task_actions(
+            self.task_id, seed=self.seed, strategy=self.strategy
+        )
         self._initialised = True
 
     def next_action(self, observation: DroneObservation, context: AgentContext) -> RawDroneAction:

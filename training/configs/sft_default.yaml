@@ -19,20 +19,31 @@ max_steps: 40
 
 # Policies that produce trajectories.
 #
-# `spec_aware_scripted` is the all-45-task solver in
-# `examples/run_task_suite.py`. It reads from each task's SolarTaskSpec
-# (required_rows, extra_zones, obstacle_schedule, defect weights) and is
-# verified to complete every task at all seeds tested. This is the
-# canonical reference for SFT.
-#
-# We don't add a second policy here. With 45 distinct tasks × 12 seeds
-# the dataset already has substantial mechanic-level diversity; adding a
-# second policy that produces a different *strategy* for the same task
-# helps less than it would on a smaller task set. The legacy `task_oracle`
-# only solves ~20 of 45 and would shrink coverage; `scripted` is a generic
-# heuristic and would mostly fail under `require_success`.
+# Three strategy variants of the spec-aware solver — they all solve every
+# task in SOLAR_TASKS but take different paths:
+#   s0 (careful)     — get_mission_checklist, severity-weighted RGB,
+#                       inspect_capture interleaved, baseline summary text.
+#   s1 (streamlined) — skip warm-up checklist, row-position RGB ordering,
+#                       compact ops-log summary.
+#   s2 (diagnostic)  — checklist + list_assets, severity-weighted RGB,
+#                       estimate_return_margin before return, narrative
+#                       summary.
+# Listing all three triples the unique action-sequence count per task and
+# trains the model that valid solutions vary in tool subset, ordering, and
+# summary phrasing — defeating task_id → fixed-sequence shortcut learning.
 policies:
-  - name: spec_aware_scripted
+  - name: spec_aware_scripted_s0
+    weight: 1
+  - name: spec_aware_scripted_s1
+    weight: 1
+  - name: spec_aware_scripted_s2
+    weight: 1
+  # s3 (recovery-aware): like s0 PLUS injects ONE failure-recovery cycle.
+  # Currently demonstrates: set_gimbal(pitch=-120) → env error
+  # `invalid_gimbal_pitch:-120.0` → drone state unchanged → set_gimbal at
+  # valid pitch → continue normally. Trains the model to read `obs.error`
+  # and emit a corrective action. Skipped on tight-budget tasks.
+  - name: spec_aware_scripted_s3
     weight: 1
 
 # Task selection.
@@ -69,17 +80,21 @@ shuffle: true                    # shuffle output order so SFT epochs don't see 
 shuffle_seed: 1                  # reproducible shuffling
 
 # Held-out tasks (NEVER trained on; written to a separate eval JSONL).
-# Picked to span the seven mechanic families introduced in the v2 suite,
-# one task per family, so cross-task generalisation gets one example each:
-#   1. dynamic-obstacle scheduling → scheduled_crane_window_wait_or_detour
-#   2. honest partial reports     → honest_partial_report_open_items
-#   3. severity-weighted triage   → strict_severity_weighted_triage
-#   4. tight-quality framing      → edge_row_quality_bar
-#   5. privacy-safe alternates    → privacy_safe_alternate_evidence
-#   6. return-margin decisions    → return_margin_decision_point
-#   7. route-replan with extra VPs → route_replan_when_primary_viewpoint_blocked
+# Picked to span six mechanic families, one task each, so cross-task
+# generalisation eval has at least one example per axis:
+#   1. honest partial reports     → honest_partial_report_open_items
+#   2. severity-weighted triage   → strict_severity_weighted_triage
+#   3. tight-quality framing      → edge_row_quality_bar
+#   4. privacy-safe alternates    → privacy_safe_alternate_evidence
+#   5. return-margin decisions    → return_margin_decision_point
+#   6. route-replan with extra VPs → route_replan_when_primary_viewpoint_blocked
+#
+# `scheduled_crane_window_wait_or_detour` is the ONLY task in the suite with
+# an `obstacle_schedule` (time-windowed obstacle), so we keep it in train —
+# without it the model never sees the `hover` wait-strategy demonstration.
+# Held-out coverage of "dynamic-obstacle scheduling" is omitted as a
+# deliberate trade-off; the alternative (no hover anywhere) is worse.
 held_out_tasks:
-  - scheduled_crane_window_wait_or_detour
   - honest_partial_report_open_items
   - strict_severity_weighted_triage
   - edge_row_quality_bar

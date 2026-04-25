@@ -57,6 +57,9 @@ class VLLMEngine:
         download_dir: str | None = None,
         tensor_parallel_size: int = 1,
         enable_thinking: bool = False,
+        enable_lora: bool = False,
+        max_lora_rank: int = 64,
+        max_loras: int = 1,
     ) -> None:
         try:
             from vllm import LLM
@@ -68,11 +71,12 @@ class VLLMEngine:
 
         self.model_id = model
         self.enable_thinking = enable_thinking
+        self.enable_lora = enable_lora
 
         # Qwen3 chat templates respect a `chat_template_kwargs={'enable_thinking': False}`
         # toggle. We apply chat templates manually below so we can pass that
         # through cleanly.
-        self._llm = LLM(
+        llm_kwargs: dict[str, Any] = dict(
             model=model,
             dtype=dtype,
             max_model_len=max_model_len,
@@ -82,6 +86,16 @@ class VLLMEngine:
             download_dir=download_dir,
             tensor_parallel_size=tensor_parallel_size,
         )
+        # LoRA support — required for PPO LoRA hot-swap each training step.
+        # `max_loras=1` keeps memory tight; we only ever serve the current
+        # policy's adapter at a time.
+        if enable_lora:
+            llm_kwargs.update(
+                enable_lora=True,
+                max_lora_rank=max_lora_rank,
+                max_loras=max_loras,
+            )
+        self._llm = LLM(**llm_kwargs)
         self._tokenizer = self._llm.get_tokenizer()
 
     def render_prompt(self, messages: list[dict[str, Any]]) -> str:
@@ -105,8 +119,16 @@ class VLLMEngine:
         top_p: float,
         max_tokens: int,
         stop: list[str] | None = None,
+        lora_request: Any | None = None,
     ) -> list[str]:
-        """Generate completions for a batch of prompts. Returns text only."""
+        """Generate completions for a batch of prompts. Returns text only.
+
+        `lora_request` (a `vllm.lora.request.LoRARequest`) selects which
+        adapter to apply for these prompts — required during PPO when
+        the policy weights live in a LoRA adapter. Pass `None` to
+        generate from the base model. Threads sharing this engine can
+        pass different `lora_request`s safely; vLLM batches across them.
+        """
 
         from vllm import SamplingParams
 
@@ -116,7 +138,15 @@ class VLLMEngine:
             max_tokens=max_tokens,
             stop=stop or [],
         )
-        outputs = self._llm.generate(prompts, params)
+        kwargs: dict[str, Any] = {}
+        if lora_request is not None:
+            if not self.enable_lora:
+                raise RuntimeError(
+                    "VLLMEngine was constructed with enable_lora=False; "
+                    "rebuild with enable_lora=True to use LoRA adapters."
+                )
+            kwargs["lora_request"] = lora_request
+        outputs = self._llm.generate(prompts, params, **kwargs)
         return [output.outputs[0].text for output in outputs]
 
 
@@ -128,6 +158,12 @@ class VLLMPolicy:
     itself just builds messages, asks the engine to generate, and parses
     the response through the same `parse_action` shared by every other
     policy.
+
+    During PPO, set `lora_request` to point at the adapter the trainer
+    just saved — the engine will apply that adapter for this rollout
+    only. Different rollouts can use different adapters concurrently
+    (vLLM batches across them), but in our single-step training pattern
+    they all use the current step's adapter.
     """
 
     engine: VLLMEngine
@@ -138,8 +174,20 @@ class VLLMPolicy:
     max_tokens: int = 1024
     max_history_steps: int = 12
     name: str = "vllm"
+    lora_request: Any | None = None
     _messages: list[dict[str, Any]] = field(default_factory=list, init=False)
     _initialised: bool = field(default=False, init=False)
+
+    @property
+    def messages(self) -> list[dict[str, Any]]:
+        """Full chat history including raw assistant outputs.
+
+        Read after a rollout completes — the trainer feeds this into
+        `tokenize_trajectory` for the PPO forward pass so log-probs are
+        computed on EXACTLY the text the model emitted (including any
+        prose before the JSON tool call).
+        """
+        return list(self._messages)
 
     def __post_init__(self) -> None:
         # Generate a tools schema string we can append to the system prompt for
@@ -159,6 +207,7 @@ class VLLMPolicy:
             top_p=self.top_p,
             max_tokens=self.max_tokens,
             stop=["<|im_end|>", "<|endoftext|>"],
+            lora_request=self.lora_request,
         )[0]
 
         # Persist the raw assistant text so subsequent turns see what the

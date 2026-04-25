@@ -25,6 +25,7 @@ invalid" turn instead of crashing.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from typing import Any, NamedTuple
@@ -39,6 +40,10 @@ _CODE_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 _THINK_BLOCK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 # Native tool-call wrapper used by Qwen3, Hermes, Llama-3.1 chat templates.
 _TOOL_CALL_BLOCK = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL | re.IGNORECASE)
+# Llama "ipython" tool-call format: `name(arg1=val1, arg2=val2)`. The model
+# emits this when given tool schemas via Meta's native API; the args are
+# literal Python values so we parse with `ast.literal_eval` for safety.
+_PYTHON_CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\(\s*(.*?)\s*\)\s*$", re.DOTALL)
 
 
 class ParsedAction(NamedTuple):
@@ -115,19 +120,24 @@ def _parse_str(text: str) -> ParsedAction:
         if parsed is not None:
             return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
-    # 2. Direct JSON parse of cleaned text.
+    # 2. Llama "ipython" Python-call format: `name(k1=v1, k2=v2)`.
+    py_action = _try_python_call(cleaned)
+    if py_action is not None:
+        return ParsedAction(py_action, thinking)
+
+    # 3. Direct JSON parse of cleaned text.
     parsed = _try_json(cleaned)
     if parsed is not None:
         return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
-    # 3. Fenced JSON.
+    # 4. Fenced JSON.
     fence_match = _CODE_FENCE.search(cleaned)
     if fence_match:
         parsed = _try_json(fence_match.group(1))
         if parsed is not None:
             return ParsedAction(_parse_dict_or_call(parsed), thinking)
 
-    # 4. First balanced {...} object — brace-depth scanner, not a greedy regex.
+    # 5. First balanced {...} object — brace-depth scanner, not a greedy regex.
     body = _first_json_object(cleaned)
     if body is not None:
         parsed = _try_json(body)
@@ -137,6 +147,39 @@ def _parse_str(text: str) -> ParsedAction:
     raise ActionValidationError(
         f"could not extract a tool call from model output: {cleaned[:160]!r}"
     )
+
+
+def _try_python_call(text: str) -> RawDroneAction | None:
+    """Parse `name(k1=v1, k2=v2, ...)` (Llama ipython tool format).
+
+    Uses `ast` so we only ever evaluate literal Python values (numbers,
+    strings, lists, tuples, dicts, booleans, None) — never function calls
+    or attribute access. Returns None on any failure so the caller can fall
+    through to the next stage.
+    """
+
+    match = _PYTHON_CALL.match(text)
+    if not match:
+        return None
+    try:
+        node = ast.parse(text.strip(), mode="eval").body
+    except SyntaxError:
+        return None
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+        return None
+    if node.args:
+        # Llama always uses keyword arguments for tool calls; positional
+        # args here are unexpected and ambiguous — fall through.
+        return None
+    args: dict[str, Any] = {}
+    for kw in node.keywords:
+        if kw.arg is None:
+            return None  # **kwargs splat is not a tool call shape
+        try:
+            args[kw.arg] = ast.literal_eval(kw.value)
+        except (ValueError, SyntaxError):
+            return None
+    return RawDroneAction(tool_name=node.func.id, arguments=args)
 
 
 def _strip_think_blocks(text: str) -> tuple[str, str]:

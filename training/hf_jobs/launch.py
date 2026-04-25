@@ -214,6 +214,11 @@ def parse_args() -> argparse.Namespace:
                         help="Tail the job logs after submission.")
     parser.add_argument("--extra-arg", action="append", default=[],
                         help="Extra positional arg to append to the in-job entrypoint command (repeatable).")
+    parser.add_argument("--env", action="append", default=[],
+                        help="KEY=VAL env var to set inside the job container (repeatable). "
+                             "Used to forward DRONECAPTUREOPS_SFT_CKPT, DRONECAPTUREOPS_WANDB_MODE, etc.")
+    parser.add_argument("--secret", action="append", default=[],
+                        help="KEY=VAL secret to set inside the job container (repeatable, encrypted server-side).")
     return parser.parse_args()
 
 
@@ -251,6 +256,21 @@ def main() -> int:
     extra_env: dict[str, str] = {}
     if rev:
         extra_env["DRONECAPTUREOPS_GIT_REV"] = rev
+    # Forward arbitrary --env KEY=VAL flags into the job's environment.
+    for kv in args.env:
+        if "=" not in kv:
+            raise SystemExit(f"--env expects KEY=VAL form, got {kv!r}")
+        k, v = kv.split("=", 1)
+        extra_env[k] = v
+    # Auto-forward WANDB_API_KEY as a secret if present in the launcher's env.
+    extra_secrets: dict[str, str] = {}
+    if "WANDB_API_KEY" in os.environ and "WANDB_API_KEY" not in [s.split("=")[0] for s in args.secret]:
+        extra_secrets["WANDB_API_KEY"] = os.environ["WANDB_API_KEY"]
+    for kv in args.secret:
+        if "=" not in kv:
+            raise SystemExit(f"--secret expects KEY=VAL form, got {kv!r}")
+        k, v = kv.split("=", 1)
+        extra_secrets[k] = v
 
     # 1. Push the repo + SFT data (skipped when --dry-run unless caller asks).
     if not args.dry_run:
@@ -283,6 +303,7 @@ def main() -> int:
         image=args.image,
         extra_env=extra_env,
         extra_args=args.extra_arg,
+        extra_secrets=extra_secrets,
     )
 
     # 3. Submit (or print).

@@ -1,0 +1,93 @@
+# PPO Run 2 — kl_coef=0.005 (exploratory; faster drift)
+#
+# Sweep variant of ppo_train_default.yaml. Hypothesis: at kl=0.005 the
+# policy can drift further from SFT, allowing it to discover better
+# strategies — at the risk of breaking tool-call format. Pairs with
+# run01 (kl=0.02) to bracket the priority dial in the runbook.
+#
+# Different `seed` so rollouts aren't identical to run01 (variance reduction
+# across the two runs).
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+output_dir: artifacts/ppo-checkpoints
+
+max_prompt_length: 8192
+max_total_length: 32768
+pad_to_multiple_of: 8
+
+ppo_epochs: 2
+minibatch_size: 4
+micro_batch_size: 1
+total_steps: 50
+save_interval_steps: 10
+log_interval_steps: 1
+
+vllm_gpu_memory_utilization: 0.4
+vllm_max_model_len: 32768
+vllm_dtype: bfloat16
+vllm_enforce_eager: false
+vllm_lora_dir: artifacts/ppo-lora-cache
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 1.0e-5
+  critic_lr: 1.0e-5
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 10
+  scheduler: cosine
+
+algorithm:
+  gamma: 0.99
+  lam: 0.95
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  value_clip: 0.2
+  dual_clip_c: null
+  kl_coef: 0.005           # aggressive end of the sweep — more policy drift
+  kl_estimator: k3
+  entropy_coef: 0.001
+  whiten_advantages: true
+
+rollout:
+  rollout_batch_size: 16
+  max_workers: 16
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens_per_turn: 1024
+  max_episode_steps: 40
+  max_history_steps: 24
+
+critic_warmup:
+  enabled: true
+  steps: 50
+  lr_multiplier: 5.0
+
+eval:
+  enabled: true
+  interval_steps: 25
+  held_out_tasks:
+    - scheduled_crane_window_wait_or_detour
+    - honest_partial_report_open_items
+    - strict_severity_weighted_triage
+    - edge_row_quality_bar
+    - privacy_safe_alternate_evidence
+    - return_margin_decision_point
+    - route_replan_when_primary_viewpoint_blocked
+  seeds_per_task: 3
+  max_episode_steps: 40
+
+train_tasks: null
+seed: 17                   # different seed so rollouts diverge from run01
+
+wandb_project: dronecaptureops-ppo
+wandb_run_name: run02-kl005
+wandb_mode: online

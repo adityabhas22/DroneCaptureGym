@@ -42,6 +42,9 @@ from pydantic import BaseModel, Field, ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "training" / "configs" / "sft_train_default.yaml"
+QWEN3_INSTRUCT_TRAINING_TEMPLATE_PATH = (
+    REPO_ROOT / "training" / "qwen3_instruct_training_template.jinja"
+)
 
 LOG = logging.getLogger("dronecaptureops.sft.train")
 
@@ -99,6 +102,16 @@ class SFTTrainConfig(BaseModel):
     metric_for_best_model: str = "eval_loss"
     greater_is_better: bool = False
     early_stopping_patience: int = 3
+
+    # Hub checkpointing. When enabled, the trainer pushes each saved
+    # checkpoint to `hub_model_id`, so progress survives job crashes.
+    # `hub_model_id` is normally injected at runtime by the HF Jobs entrypoint
+    # (set to --output-repo). For local runs, leave it None and disable
+    # push_to_hub.
+    push_to_hub: bool = False
+    hub_model_id: str | None = None
+    hub_strategy: str = "checkpoint"
+    hub_private_repo: bool = True
 
     lora: LoRAConfig = Field(default_factory=LoRAConfig)
 
@@ -224,7 +237,7 @@ def train(config: SFTTrainConfig) -> None:
     of the module (config + dataset prep) stays test-friendly."""
 
     try:
-        import torch  # noqa: F401  (sanity check the user has it)
+        import torch
         from datasets import Dataset
         from peft import LoraConfig
         from transformers import (
@@ -258,6 +271,29 @@ def train(config: SFTTrainConfig) -> None:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Patch the chat template to add `{% generation %}` markers if (a) we're
+    # using assistant_only_loss and (b) the native template doesn't have them.
+    # TRL >= 1.1 requires these markers to compute the per-token assistant_masks
+    # that drive the assistant-only loss. The patched template renders BYTE-
+    # IDENTICAL to the native (verified by tests) — it just adds Jinja markers
+    # that produce no output but tell the tokenizer where assistant tokens are.
+    if config.assistant_only_loss and "{% generation %}" not in (tokenizer.chat_template or ""):
+        model_lower = (config.model_name or "").lower()
+        if "qwen3" in model_lower and "instruct" in model_lower:
+            patched = QWEN3_INSTRUCT_TRAINING_TEMPLATE_PATH.read_text()
+            tokenizer.chat_template = patched
+            LOG.info(
+                "patched tokenizer chat template with {%% generation %%} markers from %s",
+                QWEN3_INSTRUCT_TRAINING_TEMPLATE_PATH.name,
+            )
+        else:
+            LOG.warning(
+                "assistant_only_loss=True but no patched template available for model %s; "
+                "TRL will likely fail. Either disable assistant_only_loss or add a patched "
+                "template under training/.",
+                config.model_name,
+            )
+
     train_examples, _ = filter_by_length(train_records, tokenizer=tokenizer, max_seq_length=config.max_seq_length)
     val_examples, _ = filter_by_length(val_records, tokenizer=tokenizer, max_seq_length=config.max_seq_length)
     if not train_examples:
@@ -285,7 +321,14 @@ def train(config: SFTTrainConfig) -> None:
         logging_steps=config.logging_steps,
         report_to=config.report_to or "none",
         seed=config.seed,
+        # Pass BOTH names so `_filter_kwargs` keeps whichever the active TRL
+        # build accepts. TRL <1.x used `max_seq_length`; TRL 1.x renamed it
+        # to `max_length` and silently defaults to 1024 if neither is set.
+        # 1024 truncates our 14k-token trajectories down to mostly the
+        # system+first-user prefix with NO assistant tokens — every label
+        # becomes -100, loss=0, gradients=0, no training. v7 hit this.
         max_seq_length=config.max_seq_length,
+        max_length=config.max_seq_length,
         packing=False,
         eval_strategy=config.eval_strategy if eval_ds is not None else "no",
         eval_steps=config.eval_steps if eval_ds is not None else None,
@@ -294,11 +337,15 @@ def train(config: SFTTrainConfig) -> None:
         load_best_model_at_end=config.load_best_model_at_end and eval_ds is not None,
         metric_for_best_model=config.metric_for_best_model if eval_ds is not None else None,
         greater_is_better=config.greater_is_better,
+        push_to_hub=config.push_to_hub,
+        hub_model_id=config.hub_model_id,
+        hub_strategy=config.hub_strategy,
+        hub_private_repo=config.hub_private_repo,
     )
+    # Pass `assistant_only_loss=True` to SFTConfig — the chat template was
+    # patched above with the required `{% generation %}` markers, so TRL's
+    # built-in path now works correctly without us needing a custom collator.
     if config.assistant_only_loss:
-        # TRL >= 0.11 supports `assistant_only_loss=True` directly. Older
-        # versions need DataCollatorForCompletionOnlyLM with response_template;
-        # we forward `response_template` so SFTConfig picks it up if available.
         sft_kwargs["assistant_only_loss"] = True
     sft_config = SFTConfig(**_filter_kwargs(SFTConfig, sft_kwargs))
 
@@ -378,6 +425,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-eval", action="store_true", help="Skip the train/val split and eval loop.")
     parser.add_argument("--early-stopping-patience", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--hub-model-id", dest="hub_model_id", default=None, help="HF Hub repo to push checkpoints to (overrides config).")
+    parser.add_argument("--no-push-to-hub", action="store_true", help="Disable push_to_hub even if config has it.")
     parser.add_argument("--dry-run", action="store_true", help="Validate config + dataset without launching training.")
     return parser.parse_args()
 
@@ -403,6 +452,11 @@ def _apply_cli_overrides(config: SFTTrainConfig, args: argparse.Namespace) -> SF
         update["lora"] = config.lora.model_copy(update={"enabled": False})
     if args.no_eval:
         update["val_seed_fraction"] = 0.0
+    if args.hub_model_id is not None:
+        update["hub_model_id"] = args.hub_model_id
+        update["push_to_hub"] = True
+    if args.no_push_to_hub:
+        update["push_to_hub"] = False
     if not update:
         return config
     return config.model_copy(update=update)

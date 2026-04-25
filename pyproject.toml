@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "dronecaptureops-gym"
 version = "0.1.0"
 description = "OpenEnv-compatible aerial inspection environment for high-level drone capture operations"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
   "openenv-core>=0.2.3",
   "pydantic>=2.10",
@@ -23,8 +23,29 @@ dev = [
 train = [
   "accelerate>=1.10",
   "datasets>=4.0",
+  # peft 0.19.x added `from transformers.conversion_mapping import ...` which
+  # only exists in transformers 4.58+ / 5.x, and the HF transformers-pytorch-gpu
+  # image ships an older transformers that even pip's >=4.55 upgrade doesn't
+  # bring up to that. Pin peft to 0.18.x (last release without that import).
+  "peft>=0.17,<0.19",
+  # TRL 1.2.0 added a strict requirement that the tokenizer's chat template
+  # contain `{% generation %}` markers for assistant_only_loss masking. The
+  # Qwen3 chat template doesn't have them. TRL 1.1.x still supports the
+  # legacy response_template-based masking that our config relies on.
+  "trl>=0.23.1,<1.2",
+  "torch>=2.4",
+  "transformers>=4.55",
+  "wandb>=0.18",
+]
+ppo = [
+  "accelerate>=1.10",
+  "datasets>=4.0",
   "peft>=0.17",
   "trl>=0.23.1",
+  "torch>=2.4",
+  "transformers>=4.45",
+  "vllm>=0.6.3",
+  "wandb>=0.18",
 ]
 
 [project.scripts]
@@ -33,6 +54,8 @@ dronecaptureops-server = "server.app:main"
 dronecaptureops-run-suite = "training.run_suite:main"
 dronecaptureops-trace-episode = "training.trace_episode:main"
 dronecaptureops-run-benchmark = "training.run_benchmark:main"
+dronecaptureops-train-ppo = "training.train_ppo:main"
+dronecaptureops-eval-policy = "training.eval_policy:main"
 
 [tool.setuptools.packages.find]
 include = ["dronecaptureops*", "server*"]

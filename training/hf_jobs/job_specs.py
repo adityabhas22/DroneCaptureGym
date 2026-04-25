@@ -46,11 +46,12 @@ DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 #     --hardware a100-large    # 1× A100, 80 GB, $2.50/hr
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
-    "ppo": "l40sx1",    # 4B PPO: ~3-4 h, ~$5-7 per lap
+    "ppo": "h200",      # 4B PPO: 1× H200 (141 GB) — vLLM colocate + LoRA
+                        # training fits comfortably; ~7-10 h, ~$35-50/lap.
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
     "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
-    "ppo": "6h",        # 4B PPO lands in ~3-4h; 6h headroom
+    "ppo": "12h",       # 4B PPO at 100-150 steps lands in 7-10 h; 12h headroom
 }
 
 
@@ -97,6 +98,7 @@ def build_job_spec(
     image: str = DEFAULT_IMAGE,
     extra_env: dict[str, str] | None = None,
     extra_args: list[str] | None = None,
+    extra_secrets: dict[str, str] | None = None,
 ) -> JobSpec:
     """Build a `JobSpec` for an SFT or PPO run.
 
@@ -131,15 +133,36 @@ def build_job_spec(
         "HF_TOKEN": hf_token,
         "HF_AUTH_TOKEN": hf_token,
     }
+    if extra_secrets:
+        secrets.update(extra_secrets)
 
-    command = [
-        "python",
-        "-m",
-        "training.hf_jobs.entrypoint",
-        job_type,
-    ]
-    if extra_args:
-        command.extend(extra_args)
+    # The container image is plain (no repo code baked in), so we have to
+    # bootstrap: fetch the repo tarball from HF, extract it, cd in, then
+    # run the entrypoint. Inline this as a single `bash -lc` command so the
+    # JobSpec stays self-contained — no other infrastructure to set up on the
+    # cluster side. Uses `python3` (no `python` symlink in the official
+    # transformers-pytorch-gpu image).
+    extra_cli = " ".join(f"'{a}'" for a in (extra_args or []))
+    bootstrap = (
+        "set -euo pipefail; "
+        "echo '[bootstrap] installing huggingface_hub'; "
+        "pip install -q huggingface_hub >/dev/null 2>&1 || pip install huggingface_hub; "
+        "echo '[bootstrap] downloading code tarball from '\"$DRONECAPTUREOPS_REPO_DATASET\"; "
+        "python3 -c \"import os; from huggingface_hub import hf_hub_download; "
+        "p = hf_hub_download(repo_id=os.environ['DRONECAPTUREOPS_REPO_DATASET'], "
+        "repo_type='dataset', filename='code.tar.gz', "
+        "local_dir='/workspace/_bootstrap', token=os.environ['HF_TOKEN']); "
+        "print('downloaded:', p)\"; "
+        "echo '[bootstrap] extracting'; "
+        "mkdir -p /workspace/repo; "
+        "tar -xzf /workspace/_bootstrap/code.tar.gz -C /workspace/repo; "
+        "REPO_DIR=$(find /workspace/repo -maxdepth 2 -name 'pyproject.toml' -printf '%h\\n' | head -1); "
+        "if [ -z \"$REPO_DIR\" ]; then echo '[bootstrap] ERROR: no pyproject.toml in extracted repo'; ls -R /workspace/repo; exit 2; fi; "
+        "cd \"$REPO_DIR\"; "
+        "echo '[bootstrap] running entrypoint from '\"$REPO_DIR\"; "
+        f"exec python3 -m training.hf_jobs.entrypoint {job_type} {extra_cli}"
+    )
+    command = ["bash", "-lc", bootstrap]
 
     labels = {
         "project": "dronecaptureops",
