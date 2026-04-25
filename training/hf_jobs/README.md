@@ -7,11 +7,17 @@ one-flag flip.
 
 ## Prerequisites
 
-- **HF Pro subscription** ($9/mo) or HF Enterprise org membership.
-  HF Jobs is gated; without it `list_jobs()` returns 403. The launcher
-  surfaces this clearly before pushing anything to the Hub.
-- **HF token** in env (`HF_TOKEN` or `HF_AUTH_TOKEN`) with write access
-  to your namespace.
+- **Pre-paid credit** on the HF account
+  (https://huggingface.co/settings/billing). HF Jobs is pay-as-you-go
+  for any user or organization with credits — Pro is *not* required.
+- **HF token with `job.*` scopes**. Edit your token at
+  https://huggingface.co/settings/tokens and grant:
+  - `job.read`
+  - `job.write`
+  - `job.metrics.read` (optional but useful)
+  Plus the usual `repo.write` so the launcher can upload code/data
+  and push checkpoints to your namespace.
+- **Token in env**: `HF_TOKEN` or `HF_AUTH_TOKEN`.
 - **Train deps** locally for `--dry-run` smoke testing:
   `pip install -e ".[train]"`.
 

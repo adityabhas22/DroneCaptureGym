@@ -231,16 +231,31 @@ def test_push_training_outputs_skips_missing_dirs(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_verify_hf_access_clear_error_when_account_lacks_jobs():
-    """403 from list_jobs() must surface as a Pro-upgrade message."""
+def test_verify_hf_access_clear_error_when_token_lacks_job_scopes():
+    """403 with 'missing permissions: job.read' must point at the token-scope fix."""
 
     from training.hf_jobs.launch import AccountError, verify_hf_access
 
     fake_api = MagicMock()
     fake_api.whoami.return_value = {"name": "u", "type": "user", "isPro": False}
-    fake_api.list_jobs.side_effect = Exception("403 Forbidden")
+    fake_api.list_jobs.side_effect = Exception(
+        "403 Forbidden: You don't have the required permissions, missing permissions: job.read"
+    )
     with patch("huggingface_hub.HfApi", return_value=fake_api):
-        with pytest.raises(AccountError, match="HF Jobs is not available"):
+        with pytest.raises(AccountError, match=r"job\.\* fine-grained scopes"):
+            verify_hf_access("hf_fake")
+
+
+def test_verify_hf_access_generic_error_for_unknown_failure():
+    """Other list_jobs failures (e.g. no credits) get the generic actionable message."""
+
+    from training.hf_jobs.launch import AccountError, verify_hf_access
+
+    fake_api = MagicMock()
+    fake_api.whoami.return_value = {"name": "u", "type": "user", "isPro": False}
+    fake_api.list_jobs.side_effect = Exception("500 Internal Server Error")
+    with patch("huggingface_hub.HfApi", return_value=fake_api):
+        with pytest.raises(AccountError, match="Could not list HF Jobs"):
             verify_hf_access("hf_fake")
 
 

@@ -71,11 +71,15 @@ class AccountError(SystemExit):
 
 
 def verify_hf_access(token: str) -> dict:
-    """Confirm whoami works and that the account can submit jobs.
+    """Confirm whoami works and that the token+account can run jobs.
 
-    HF Jobs is gated behind Pro / Enterprise — without it list_jobs
-    returns 403. We surface a clear error early instead of letting
-    run_job() fail mid-flight after we've already pushed artefacts.
+    HF Jobs are pay-as-you-go for any account with pre-paid credits.
+    The most common blockers we surface here:
+      1. token without `job.*` fine-grained scopes (403 missing
+         permissions),
+      2. no pre-paid credit on the account (different error shape).
+    We probe via list_jobs() and translate to actionable messages
+    before the launcher uploads artefacts.
     """
 
     from huggingface_hub import HfApi
@@ -88,16 +92,32 @@ def verify_hf_access(token: str) -> dict:
             f"HF whoami() failed — check your HF_TOKEN / HF_AUTH_TOKEN. Underlying error: {exc}"
         ) from exc
 
-    LOG.info("authenticated as %s (type=%s, pro=%s)", whoami.get("name"), whoami.get("type"), whoami.get("isPro"))
+    LOG.info(
+        "authenticated as %s (type=%s, pro=%s)",
+        whoami.get("name"),
+        whoami.get("type"),
+        whoami.get("isPro"),
+    )
 
     try:
         api.list_jobs()
     except Exception as exc:  # noqa: BLE001
+        message = str(exc).lower()
+        if "missing permissions" in message or "job.read" in message or "job.write" in message:
+            raise AccountError(
+                "Token is missing the job.* fine-grained scopes.\n"
+                f"  Underlying error: {exc}\n"
+                "  Fix: regenerate or edit your access token at https://huggingface.co/settings/tokens\n"
+                "       and grant `job.read`, `job.write` (and ideally `job.metrics.read`).\n"
+                "  HF Jobs are pay-as-you-go — once the scopes are right and the account has\n"
+                "  pre-paid credit (https://huggingface.co/settings/billing) you're set."
+            ) from exc
         raise AccountError(
-            "HF Jobs is not available on this account.\n"
+            "Could not list HF Jobs for this account.\n"
             f"  Underlying error: {exc}\n"
-            "  HF Jobs requires a Pro subscription ($9/mo) or HF Enterprise org membership.\n"
-            "  Upgrade at https://huggingface.co/settings/billing then retry."
+            "  Most common causes: token missing job.* scopes, or no pre-paid credits on the\n"
+            "  account. Check https://huggingface.co/settings/tokens and\n"
+            "  https://huggingface.co/settings/billing."
         ) from exc
 
     return whoami
