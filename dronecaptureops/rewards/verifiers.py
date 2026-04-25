@@ -43,6 +43,74 @@ def report_cited_photo_ids(report: EvidenceReport | None) -> set[str]:
     return {photo_id for photo_id in cited if isinstance(photo_id, str)}
 
 
+def report_citation_diagnostics(world: EpisodeWorld) -> dict[str, Any]:
+    """Explain report-citation anti-gaming checks in a structured form."""
+
+    report = world.final_report
+    if report is None:
+        return {
+            "overbroad_citations": False,
+            "irrelevant_cited_photo_ids": [],
+            "issue_citation_warnings": [],
+            "hallucinated_issue_warnings": [],
+        }
+    warnings: list[str] = []
+    hallucinated: list[str] = []
+    real_ids = {capture.photo_id for capture in world.capture_log}
+    cited = report_cited_photo_ids(report) & real_ids
+    useful = {
+        capture.photo_id
+        for capture in world.capture_log
+        if _capture_has_report_value(world, capture)
+    }
+    irrelevant = sorted(cited - useful)
+    overbroad = len(cited) > len(useful) + 2 and len(irrelevant) >= max(2, len(cited) // 3)
+    if overbroad:
+        warnings.append(f"overbroad citations include irrelevant photos: {irrelevant}")
+
+    issue_items = _reported_issue_items(report, {defect.defect_id for defect in world.hidden_defects})
+    defects_by_id = {defect.defect_id: defect for defect in world.hidden_defects}
+    for item in issue_items:
+        issue_id = item["issue_id"]
+        defect = defects_by_id.get(issue_id)
+        if defect is None:
+            continue
+        if not defect.counts_for_issue_reward:
+            hallucinated.append(f"non-reportable issue claimed: {issue_id}")
+            continue
+        ids = set(item["photo_ids"]) & real_ids
+        thermal_ok = any(
+            _photo_proves_defect(world, photo_id, defect, sensor=defect.required_sensor)
+            for photo_id in ids
+        )
+        rgb_ok = (
+            True
+            if not defect.requires_rgb_context
+            else any(_photo_proves_defect(world, photo_id, defect, sensor="rgb") for photo_id in ids)
+        )
+        if not thermal_ok or not rgb_ok:
+            missing = []
+            if not thermal_ok:
+                missing.append("thermal_detection")
+            if not rgb_ok:
+                missing.append("rgb_context")
+            warnings.append(f"reported issue {issue_id} lacks issue-specific cited evidence: {missing}")
+
+    if not reportable_defects(world):
+        for item in issue_items:
+            hallucinated.append(f"issue reported in no-anomaly mission: {item['issue_id']}")
+        for index, finding in enumerate(report.findings):
+            if _finding_claims_positive_issue(finding):
+                hallucinated.append(f"positive issue claim in no-anomaly mission at findings[{index}]")
+
+    return {
+        "overbroad_citations": overbroad,
+        "irrelevant_cited_photo_ids": irrelevant,
+        "issue_citation_warnings": warnings,
+        "hallucinated_issue_warnings": hallucinated,
+    }
+
+
 def is_photo_valid(
     world: EpisodeWorld,
     photo_id: str,
@@ -412,15 +480,16 @@ def compute_integrity_gate(world: EpisodeWorld) -> tuple[float, list[str]]:
     if unsupported:
         warnings.append(f"unsupported issue claims: {sorted(unsupported)}")
         cap = min(cap, 0.20)
-    for issue in report.issues_found:
-        issue_id = issue.get("issue_id")
-        defect = next((item for item in world.hidden_defects if item.defect_id == issue_id), None)
-        if defect is None:
-            continue
-        score, _ = defect_captured(world, defect, cited_only=True)
-        if score < 1.0:
-            warnings.append(f"reported issue lacks complete cited evidence: {issue_id}")
-            cap = min(cap, 0.40 if score <= 0.0 else 0.60)
+    diagnostics = report_citation_diagnostics(world)
+    for warning in diagnostics["issue_citation_warnings"]:
+        warnings.append(warning)
+        cap = min(cap, 0.40)
+    for warning in diagnostics["hallucinated_issue_warnings"]:
+        warnings.append(warning)
+        cap = min(cap, 0.20)
+    if diagnostics["overbroad_citations"]:
+        warnings.append("overbroad report citations: cite only photos that support a specific claim")
+        cap = min(cap, 0.70)
     safety_text = " ".join(report.safety_notes).lower()
     claims_returned = "return" in safety_text or "home" in safety_text
     claims_landed = "land" in safety_text
@@ -444,6 +513,71 @@ def _reported_issue_ids(report: EvidenceReport, known_defects: set[str]) -> set[
         if isinstance(value, str) and (value in known_defects or _looks_like_issue_id(value)):
             ids.add(value)
     return ids
+
+
+def _reported_issue_items(report: EvidenceReport, known_defects: set[str]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for issue in report.issues_found:
+        issue_id = issue.get("issue_id")
+        if isinstance(issue_id, str) and issue_id:
+            items.append({"issue_id": issue_id, "photo_ids": _ids_from(issue, "photo_ids") | _ids_from(issue, "evidence_photo_ids")})
+    for finding in report.findings:
+        issue_id = None
+        for key in ("issue_id", "defect_id"):
+            value = finding.get(key)
+            if isinstance(value, str) and value:
+                issue_id = value
+                break
+        value = finding.get("finding")
+        if issue_id is None and isinstance(value, str) and (value in known_defects or _looks_like_issue_id(value)):
+            issue_id = value
+        if issue_id is not None:
+            items.append({"issue_id": issue_id, "photo_ids": _ids_from(finding, "photo_ids") | _ids_from(finding, "evidence_photo_ids")})
+    return items
+
+
+def _photo_proves_defect(world: EpisodeWorld, photo_id: str, defect: HiddenDefect, *, sensor: SensorType) -> bool:
+    capture = capture_by_id(world, photo_id)
+    if capture is None or capture.sensor != sensor:
+        return False
+    if defect.target_id not in capture.targets_visible:
+        return False
+    if sensor == defect.required_sensor and defect.defect_id not in capture.detected_anomalies:
+        return False
+    threshold = defect.min_quality if sensor == defect.required_sensor else max(rgb_quality_threshold(world), defect.min_quality - 0.10)
+    if capture.target_quality(defect.target_id) < threshold:
+        return False
+    if capture.occlusion_pct > max(defect.max_occlusion, 0.35):
+        return False
+    return True
+
+
+def _capture_has_report_value(world: EpisodeWorld, capture: Capture) -> bool:
+    thermal_threshold = thermal_quality_threshold(world)
+    if capture.sensor == "thermal" and any(
+        row_id in capture.targets_visible and capture.target_quality(row_id) >= thermal_threshold
+        for row_id in world.mission.required_rows
+    ):
+        return True
+    for defect in reportable_defects(world):
+        if _photo_proves_defect(world, capture.photo_id, defect, sensor=defect.required_sensor):
+            return True
+        if defect.requires_rgb_context and _photo_proves_defect(world, capture.photo_id, defect, sensor="rgb"):
+            return True
+    return False
+
+
+def _finding_claims_positive_issue(finding: dict[str, Any]) -> bool:
+    if finding.get("issue_id") or finding.get("defect_id"):
+        return True
+    text = str(finding.get("finding", "")).lower()
+    if not text:
+        return False
+    negations = ("no anomaly", "no defect", "no issue", "none observed", "nothing observed", "no hotspot")
+    if any(phrase in text for phrase in negations):
+        return False
+    positive_terms = ("anomaly", "defect", "hotspot", "fault", "issue")
+    return any(term in text for term in positive_terms)
 
 
 def _looks_like_issue_id(value: str) -> bool:

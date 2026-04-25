@@ -341,7 +341,8 @@ def format_summary(summary: dict[str, Any], rows: list[EvalRow]) -> str:
         lines.append(f"\n  {model}:")
         for name in CHECKPOINT_NAMES:
             rate = agg["checkpoint_completion_rate"].get(name, 0.0)
-            bar = "█" * int(rate * 20) + "·" * (20 - int(rate * 20))
+            # Keep stdout ASCII-safe for Windows consoles using cp1252.
+            bar = "#" * int(rate * 20) + "." * (20 - int(rate * 20))
             lines.append(f"    {name:<24} {rate:>6.1%}  {bar}")
 
     lines.append("\n=== mean tool calls per episode (top 10 per model) ===")

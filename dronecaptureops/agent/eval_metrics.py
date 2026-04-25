@@ -66,6 +66,7 @@ class TrajectoryMetrics:
     failure_mode: str
     coverage: dict[str, Any]
     safety: dict[str, Any]
+    citation_diagnostics: dict[str, Any]
     reward_components: dict[str, float]
     oracle_comparison: dict[str, Any]
 
@@ -93,6 +94,7 @@ def trajectory_metrics(
         failure_mode=classify_failure_mode(result),
         coverage=coverage_metrics(result),
         safety=safety_profile(result),
+        citation_diagnostics=citation_diagnostics(result),
         reward_components=extract_reward_components(result),
         oracle_comparison=oracle_comparison(result, oracle_result),
     )
@@ -269,6 +271,30 @@ def safety_profile(result: RolloutResult) -> dict[str, Any]:
     }
 
 
+def citation_diagnostics(result: RolloutResult) -> dict[str, Any]:
+    """Surface report-citation anti-gaming warnings for benchmark aggregation."""
+
+    submit_result = _submit_action_result(result) or {}
+    submit_warnings = [
+        warning for warning in submit_result.get("warnings", [])
+        if isinstance(warning, str)
+    ]
+    debug = result.reward_breakdown.get("debug") or {}
+    integrity_warnings = [
+        warning for warning in debug.get("integrity_warnings", [])
+        if isinstance(warning, str)
+    ]
+    warnings = submit_warnings + [warning for warning in integrity_warnings if warning not in submit_warnings]
+    return {
+        "submit_warnings": submit_warnings,
+        "integrity_warnings": integrity_warnings,
+        "overbroad_citations": any("overbroad" in warning or "irrelevant photos" in warning for warning in warnings),
+        "issue_specific_evidence_missing": any("issue-specific cited evidence" in warning for warning in warnings),
+        "hallucinated_issue_claim": any("no-anomaly" in warning or "non-reportable issue" in warning for warning in warnings),
+        "fake_or_unsupported_claim": any("fake photo ids" in warning or "unsupported issue claims" in warning for warning in warnings),
+    }
+
+
 def extract_reward_components(result: RolloutResult) -> dict[str, float]:
     """Pull the reward breakdown components we care about into a flat dict."""
 
@@ -372,6 +398,7 @@ def aggregate_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "tool_calls_per_episode": {
                 tool: round(count / n, 3) for tool, count in sorted(tool_totals.items(), key=lambda kv: -kv[1])
             },
+            "citation_diagnostic_rate": _citation_diagnostic_rates(model_rows),
         }
     return summary
 
@@ -401,12 +428,27 @@ def _tool_sequence(result: RolloutResult) -> list[str]:
     ]
 
 
+def _citation_diagnostic_rates(rows: list[dict[str, Any]]) -> dict[str, float]:
+    keys = (
+        "overbroad_citations",
+        "issue_specific_evidence_missing",
+        "hallucinated_issue_claim",
+        "fake_or_unsupported_claim",
+    )
+    n = max(len(rows), 1)
+    rates: dict[str, float] = {}
+    for key in keys:
+        rates[key] = round(sum(1 for row in rows if (row.get("citation_diagnostics") or {}).get(key)) / n, 4)
+    return rates
+
+
 __all__ = [
     "CHECKPOINT_NAMES",
     "FAILURE_MODES",
     "TrajectoryMetrics",
     "aggregate_diagnostics",
     "classify_failure_mode",
+    "citation_diagnostics",
     "coverage_metrics",
     "extract_checkpoints",
     "extract_reward_components",

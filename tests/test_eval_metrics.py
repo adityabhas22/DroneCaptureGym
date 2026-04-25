@@ -14,6 +14,7 @@ from dronecaptureops.agent.eval_metrics import (
     FAILURE_MODES,
     aggregate_diagnostics,
     classify_failure_mode,
+    citation_diagnostics,
     coverage_metrics,
     extract_checkpoints,
     extract_reward_components,
@@ -228,8 +229,32 @@ def test_trajectory_metrics_composes_all_pieces():
     assert metrics.failure_mode == "success"
     assert metrics.checkpoints["submission_accepted"] is True
     assert metrics.coverage["rows_required"] == 5
+    assert metrics.citation_diagnostics["overbroad_citations"] is False
     assert metrics.oracle_comparison["available"] is True
     assert metrics.reward_components["total"] >= 0.95
+
+
+def test_citation_diagnostics_surface_integrity_warnings():
+    from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
+    from dronecaptureops.core.models import RawDroneAction
+
+    env = DroneCaptureOpsEnvironment()
+    runner = RolloutRunner(env=env)
+
+    class _FakeCitationPolicy:
+        name = "fake_citation"
+
+        def next_action(self, obs, ctx):  # noqa: ANN001
+            return RawDroneAction(
+                tool_name="submit_evidence_pack",
+                arguments={"summary": "fake", "photo_ids": ["IMG-T-999"], "findings": []},
+            )
+
+    result = runner.run(_FakeCitationPolicy(), seed=7, task_id="basic_thermal_survey", max_steps=1)
+    diagnostics = citation_diagnostics(result)
+
+    assert diagnostics["fake_or_unsupported_claim"] is True
+    assert any("fake photo ids" in warning for warning in diagnostics["submit_warnings"])
 
 
 # --- aggregation -------------------------------------------------------------

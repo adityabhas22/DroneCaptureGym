@@ -1,7 +1,7 @@
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
 from dronecaptureops.core.models import EvidenceReport
 from dronecaptureops.core.models import RawDroneAction
-from dronecaptureops.rewards.verifiers import compute_integrity_gate, compute_issue_capture
+from dronecaptureops.rewards.verifiers import compute_integrity_gate, compute_issue_capture, report_citation_diagnostics
 
 
 def act(tool_name: str, **arguments):
@@ -202,6 +202,45 @@ def test_structured_report_payload_can_complete_mission():
     assert obs.reward_breakdown.grounded_report >= 0.75
 
 
+def test_issue_report_requires_issue_specific_thermal_and_rgb_citations():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+    obs = complete_capture_flow(env)
+    all_ids = [capture.photo_id for capture in obs.capture_log]
+    thermal_ids = [capture.photo_id for capture in obs.capture_log if capture.sensor == "thermal"]
+    rgb_ids = [capture.photo_id for capture in obs.capture_log if capture.sensor == "rgb"]
+    defect_id = env.debug_world.hidden_defects[0].defect_id
+
+    obs = env.step(
+        act(
+            "submit_evidence_pack",
+            summary=f"Rows inspected and issue {defect_id} confirmed. Returned home with battery reserve.",
+            photo_ids=all_ids,
+            evidence=[
+                {
+                    "requirement_id": "thermal_overview_rows_B4_B8",
+                    "status": "satisfied",
+                    "photo_ids": thermal_ids,
+                }
+            ],
+            issues_found=[
+                {
+                    "issue_id": defect_id,
+                    # Top-level photo_ids include thermal evidence, but the
+                    # issue item itself must cite both modalities.
+                    "evidence_photo_ids": rgb_ids,
+                    "recommended_followup": "manual review",
+                }
+            ],
+            safety_notes=["Returned home with battery reserve."],
+        )
+    )
+
+    assert obs.action_result["accepted"] is False
+    assert obs.reward_breakdown.integrity_gate <= 0.4
+    assert any("issue-specific cited evidence" in warning for warning in obs.action_result["warnings"])
+
+
 def test_false_positive_glare_is_not_required_issue_reward():
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=2203, scenario_family="false_positive_glare")
@@ -211,6 +250,27 @@ def test_false_positive_glare_is_not_required_issue_reward():
     assert score == 1.0
     assert debug["issues_required"] == 0
     assert all(not defect.counts_for_issue_reward for defect in env.debug_world.hidden_defects)
+
+
+def test_false_positive_glare_reported_as_real_issue_is_integrity_penalized():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=2203, scenario_family="false_positive_glare")
+    obs = complete_capture_flow(env)
+    photo_ids = [capture.photo_id for capture in obs.capture_log]
+
+    obs = env.step(
+        act(
+            "submit_evidence_pack",
+            summary="False thermal artifact reported as a real defect. Returned home with battery reserve.",
+            photo_ids=photo_ids,
+            findings=[{"finding": "glare_artifact_B6", "photo_ids": photo_ids}],
+            safety_notes=["Returned home with battery reserve."],
+        )
+    )
+
+    assert obs.action_result["accepted"] is False
+    assert obs.reward_breakdown.integrity_gate == 0.2
+    assert any("unsupported issue claims" in warning or "non-reportable issue" in warning for warning in obs.action_result["warnings"])
 
 
 def test_unknown_finding_id_is_integrity_penalized():
@@ -271,11 +331,16 @@ def test_indiscriminate_citation_is_penalized():
 
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=7)
-    obs = capture_thermal_overview(env)
+    obs = complete_capture_flow(env)
     useful_ids = [capture.photo_id for capture in obs.capture_log]
-    # Add several low-value redundant captures from the same vantage.
-    for _ in range(6):
-        env.step(act("capture_thermal", label="redundant"))
+    # Add several irrelevant captures that show no mission target, then cite
+    # them all to mimic a "dump every photo" report.
+    env.step(act("takeoff", altitude_m=18))
+    env.step(act("fly_to_viewpoint", x=0, y=45, z=18, yaw_deg=180, speed_mps=5))
+    env.step(act("set_camera_source", source="rgb"))
+    env.step(act("set_gimbal", pitch_deg=-25, yaw_deg=0))
+    for _ in range(4):
+        env.step(act("capture_rgb", label="irrelevant background"))
     env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
     env.step(act("return_home"))
     env.step(act("land"))
@@ -287,21 +352,36 @@ def test_indiscriminate_citation_is_penalized():
         findings=[],
     ))
 
-    env2 = DroneCaptureOpsEnvironment()
-    env2.reset(seed=7)
-    capture_thermal_overview(env2)
-    env2.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
-    env2.step(act("return_home"))
-    env2.step(act("land"))
-    obs_tight = env2.step(act(
-        "submit_evidence_pack",
-        summary="Tight cite.",
-        photo_ids=useful_ids,
-        findings=[],
-    ))
+    diagnostics = report_citation_diagnostics(env.debug_world)
 
-    assert obs_indiscriminate.reward_breakdown.penalties > obs_tight.reward_breakdown.penalties
-    assert obs_tight.reward_breakdown.total >= obs_indiscriminate.reward_breakdown.total
+    assert diagnostics["overbroad_citations"] is True
+    assert obs_indiscriminate.reward_breakdown.integrity_gate <= 0.7
+    assert any("overbroad" in warning for warning in obs_indiscriminate.action_result["warnings"])
+    assert set(useful_ids) < set(all_ids)
+
+
+def test_no_anomaly_task_penalizes_hallucinated_issue_report():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7, task="no_anomaly_clearance")
+    obs = capture_thermal_overview(env)
+    photo_ids = [capture.photo_id for capture in obs.capture_log]
+    env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
+    env.step(act("return_home"))
+    env.step(act("land"))
+
+    obs = env.step(
+        act(
+            "submit_evidence_pack",
+            summary="Rows inspected; hallucinated hotspot_B6 issue. Returned home with battery reserve.",
+            photo_ids=photo_ids,
+            issues_found=[{"issue_id": "hotspot_B6", "evidence_photo_ids": photo_ids}],
+            safety_notes=["Returned home with battery reserve."],
+        )
+    )
+
+    assert obs.action_result["accepted"] is False
+    assert obs.reward_breakdown.integrity_gate == 0.2
+    assert any("no-anomaly mission" in warning for warning in obs.action_result["warnings"])
 
 
 def test_process_reward_only_fires_on_progress_not_idle_actions():
