@@ -1,174 +1,271 @@
-# SolarInspect Rewards Implementation
+# Solar Rewards Implementation (How It Actually Scores)
 
-This branch implements the Solar Farm Inspection reward specification on top of the richer environment model that is now on `main`. The goal is to reward complete, safe, grounded inspection evidence rather than waypoint visiting or photo count.
+This document explains how the current SolarInspect reward system works in code, why the design is shaped this way, and how to read reward values during training.
 
-## What Changed
+The core idea is:
 
-Terminal mission scoring now follows the outcome-first formula from the specification:
+1. Reward mission outcomes, not button pressing.
+2. Use deterministic verifiers instead of text judging.
+3. Allow non-terminal shaping, but only a small amount.
+4. Use hard caps to block unsafe or dishonest high scores.
+
+## 1) Mental Model
+
+The reward system has two phases:
+
+1. Non-terminal phase (before submit):
+   The environment returns a capped shaping reward in [0.0, 0.20].
+2. Terminal phase (after `submit_evidence_pack`):
+   The environment computes outcome reward and then applies safety and integrity caps.
+
+Think of non-terminal reward as progress breadcrumbs and terminal reward as the mission grade.
+
+## 2) Terminal Reward Formula
+
+The final mission score uses this outcome-first formula:
 
 ```text
-R_total =
-  min(
-    safety_gate,
-    integrity_gate,
-    0.45 * evidence_success
+R_total = min(
+  safety_gate,
+  integrity_gate,
+  0.45 * evidence_success
   + 0.20 * required_coverage
   + 0.15 * issue_capture
   + 0.10 * operational_efficiency
   + 0.10 * grounded_report
   + process_reward
   - penalties
-  )
+)
 ```
 
-The old reward fields are still populated for compatibility:
+Intuition for the weights:
+
+- `evidence_success` (0.45) is the dominant term because it summarizes whether the mission delivered the required proof.
+- `required_coverage` (0.20) ensures thermal rows are truly covered.
+- `issue_capture` (0.15) rewards finding and proving hidden defects.
+- `operational_efficiency` (0.10) discourages wasteful missions.
+- `grounded_report` (0.10) rewards report quality and evidence linkage.
+
+If a mission is unsafe or dishonest, `safety_gate` or `integrity_gate` clamps the final score even when the weighted sum is high.
+
+## 3) Non-Terminal Shaping
+
+Before a final report is submitted, `total` is not the formula above. It is a capped shaping value:
+
+```text
+shaping = clamp(
+  0.10 * captured_evidence_success
+  + 0.04 * captured_coverage
+  + 0.04 * captured_issue
+  + process_reward
+  - penalties,
+  0.0,
+  0.20
+)
+```
+
+Why this exists:
+
+- Gives gradients early in the episode.
+- Prevents agents from farming high reward before proving completion.
+
+The `debug` payload exposes this split through:
+
+- `terminal_submitted`
+- `nonterminal_cap_applied`
+- `shaping_reward`
+- `raw_outcome_if_submitted`
+
+## 4) Captured Evidence vs Cited Evidence
+
+A major design detail is the captured/cited distinction.
+
+- Captured metrics: what the drone has actually collected so far.
+- Cited metrics: what the final report explicitly cites and can defend.
+
+Behavior:
+
+1. During exploration, coverage and issue values come from captured evidence.
+2. At terminal scoring, those same values switch to cited-only evidence.
+
+This prevents a common failure mode where an agent collects valid evidence but submits a report that fails to reference it correctly.
+
+## 5) Component-by-Component Intuition
+
+### 5.1 `required_coverage`
+
+Definition:
+
+- Fraction of required rows that have at least one valid thermal capture (`quality >= 0.55`).
+
+Intuition:
+
+- One high-quality thermal can cover multiple rows.
+- Wrong sensor (RGB) does not count toward thermal requirement.
+
+### 5.2 `issue_capture`
+
+Definition:
+
+- Weighted hidden-defect capture score across mission defects.
+- A defect can score partial credit (0.6) when thermal proof exists but required RGB context is missing.
+
+Intuition:
+
+- Thermal finds the abnormality.
+- RGB provides contextual confirmation when the defect requires it.
+- Full score means both evidence types are present when required.
+
+### 5.3 `evidence_success`
+
+Definition:
+
+```text
+0.55 * required_coverage + 0.35 * issue_capture + 0.10 * terminal_safety
+```
+
+where `terminal_safety` requires final-report submission plus return-home and battery constraints.
+
+Intuition:
+
+- This is the mission-level "did you actually complete the contract" scalar.
+- It combines coverage, defect evidence, and mission closure conditions.
+
+### 5.4 `operational_efficiency`
+
+Definition:
+
+- Efficiency score gated by completion and penalized by excess distance, photos, time, and battery overuse relative to scenario-scaled reference budgets.
+
+Intuition:
+
+- Efficient operations matter only after meaningful progress.
+- Fast but incomplete missions do not earn strong efficiency reward.
+
+### 5.5 `grounded_report`
+
+Definition:
+
+- Score from `validate_evidence_report`, based on:
+  - requirement-photo linkage,
+  - issue-photo linkage,
+  - open-item correctness,
+  - safety note consistency.
+
+Intuition:
+
+- The report is graded as an auditable artifact, not just free text.
+
+### 5.6 `process_reward`
+
+Definition:
+
+- Small cumulative bonus (capped at 0.10) for useful intermediate actions such as:
+  - new thermal coverage,
+  - RGB issue-context improvement,
+  - recapturing poor evidence with better quality,
+  - return-home completion,
+  - inspecting captured photos.
+
+Intuition:
+
+- Encourages good workflow habits.
+- Too small to dominate final scoring.
+
+### 5.7 `penalties`
+
+Definition:
+
+- Deductions for invalid format/actions, low-value duplicate captures, and poor mission-end behavior.
+
+Intuition:
+
+- Penalizes noise and gaming without punishing genuinely useful recaptures.
+
+### 5.8 `safety_gate`
+
+Definition:
+
+- Cap derived from violations and unsafe endings.
+
+Examples:
+
+- collision can cap at 0.0,
+- no-fly violation can cap at 0.10,
+- timeout away from home can cap at 0.40.
+
+Intuition:
+
+- Safety is non-negotiable. High evidence cannot erase severe safety failures.
+
+### 5.9 `integrity_gate`
+
+Definition:
+
+- Cap derived from evidence/report integrity checks.
+
+Examples:
+
+- fake photo IDs,
+- "satisfied" requirements without valid photos,
+- thermal requirements citing RGB,
+- low-quality evidence cited as definitive,
+- unsupported issue claims,
+- safety claims contradicting telemetry.
+
+Intuition:
+
+- Prevents reward from being hacked through report fabrication.
+
+## 6) Why Deterministic Verifiers
+
+The verifier module computes all key mission checks from simulator state and capture metadata.
+
+Benefits:
+
+1. Reproducible and debuggable scoring.
+2. Less reward drift across model versions.
+3. Clear anti-cheating hooks.
+
+## 7) Legacy Fields Still Exposed
+
+For compatibility with existing downstream consumers:
 
 - `target_coverage` mirrors `required_coverage`
 - `defect_visibility` mirrors `issue_capture`
 - `route_efficiency` mirrors `operational_efficiency`
 - `report_grounding` mirrors `grounded_report`
 
-New logged reward fields include:
+## 8) Evidence Pack Formats
 
-- `evidence_success`
-- `required_coverage`
-- `issue_capture`
-- `operational_efficiency`
-- `grounded_report`
-- `process_reward`
-- `integrity_gate`
-- `value_per_photo`
-- `debug`
+`submit_evidence_pack` accepts both:
 
-Before final report submission, the environment still emits learning signal, but that value is treated as capped shaping/progress rather than the actual mission score. The debug payload makes this explicit:
+1. Legacy payload (`summary`, `photo_ids`, `findings`)
+2. Structured payload (`evidence`, `issues_found`, `open_items`, `safety_notes`)
 
-```json
-{
-  "terminal_submitted": false,
-  "nonterminal_cap_applied": true,
-  "shaping_reward": 0.14,
-  "raw_outcome_if_submitted": 0.72
-}
-```
+Both paths are normalized by verifier logic before scoring.
 
-After `submit_evidence_pack`, `total` is the terminal mission score after safety and integrity caps.
+## 9) Practical Reading Guide for Training Curves
 
-## Verifier Utilities
+When `total` is low, inspect these in order:
 
-The new `dronecaptureops.rewards.verifiers` module centralizes deterministic checks used by the reward system:
+1. `safety_gate` and `integrity_gate` (caps)
+2. `required_coverage` and `issue_capture` (mission proof)
+3. `grounded_report` (report quality)
+4. `penalties` (behavior noise)
+5. `process_reward` (should be small, never dominant)
 
-- photo ID validity
-- target visibility in a photo
-- capture quality for a target/photo pair
-- required thermal row coverage
-- hidden issue capture
-- evidence success
-- operational efficiency
-- safety cap calculation
-- integrity cap calculation
-- value per photo
+If the agent plateaus near 0.2, it is usually living in shaping mode and not finishing with valid submission.
 
-Verifier scoring now separates captured progress from cited terminal proof. Captured thermal coverage and issue visibility are useful during exploration, while terminal `evidence_success` is based on final report citations. A single valid cited thermal photo can satisfy multiple required rows, but every required row must be visible in at least one cited valid thermal photo.
+## 10) Tested Behaviors
 
-These checks use simulator state and capture metadata, not an LLM judge.
+Current tests verify:
 
-## Safety and Integrity Gates
-
-Safety is now cap-based rather than a binary zero. For example, a no-fly violation caps total reward at `0.10`, while timeout away from home caps at `0.40`. This keeps a learning signal for recoverable failures while preventing unsafe missions from scoring highly.
-
-The integrity gate caps rewards for evidence hallucination and report misuse, including:
-
-- fake photo IDs
-- reports submitted without captured evidence
-- satisfied requirements without valid evidence
-- wrong sensor citations
-- low-quality evidence cited as definitive
-- unsupported issue claims
-- safety notes that contradict telemetry
-- structured `satisfied` claims that do not prove the stated requirement
-
-## Evidence Reports
-
-`submit_evidence_pack` now supports both the existing payload shape and the structured report shape from the specification.
-
-Existing compatible payload:
-
-```json
-{
-  "summary": "Rows B4-B8 inspected.",
-  "photo_ids": ["IMG-T-001", "IMG-R-002"],
-  "findings": [{"finding": "hotspot_B6", "photo_ids": ["IMG-T-001", "IMG-R-002"]}]
-}
-```
-
-Structured payload:
-
-```json
-{
-  "mission_status": "complete",
-  "evidence": [
-    {
-      "requirement_id": "thermal_overview_rows_B4_B8",
-      "status": "satisfied",
-      "photo_ids": ["IMG-T-001"]
-    }
-  ],
-  "issues_found": [
-    {
-      "issue_id": "hotspot_B6",
-      "evidence_photo_ids": ["IMG-T-001", "IMG-R-002"],
-      "recommended_followup": "manual review"
-    }
-  ],
-  "open_items": [],
-  "safety_notes": ["Returned home with battery reserve."]
-}
-```
-
-## Process Rewards and Penalties
-
-Process reward is intentionally small and capped at `0.10`. It rewards useful learning signals such as valid tool calls, accepted safe flight, useful captures, correct sensor use, improved recaptures, return-home behavior, and inspecting captures before reporting.
-
-Penalties cover invalid actions, redundant low-value captures, premature/no-evidence reports, and missions that end without returning home when required.
-
-## Capture and Report Behavior
-
-RGB anomaly follow-up is stricter now: an RGB capture only pairs with a detected anomaly if it actually sees that anomaly's target row with sufficient quality. This prevents a generic RGB photo from satisfying every detected issue.
-
-Report grounding checks all cited photo IDs across both compatible and structured report fields. Thermal requirements must cite thermal evidence, and issue reports must cite real captured evidence.
-
-For defects that require RGB context, full terminal issue credit requires cited valid thermal defect evidence and cited valid RGB context evidence for the defect target. Thermal-only defect evidence still gives partial exploration credit, but it cannot become full terminal issue credit.
-
-Redundancy penalties are based on low marginal value rather than repeated targets alone. Useful recaptures, better-quality images, RGB context, issue confirmations, and cited evidence are not penalized simply because they overlap with earlier photos.
-
-## Tests Added or Updated
-
-The reward tests now cover:
-
-- new reward breakdown shape
-- no-fly safety cap behavior
-- fake photo ID integrity cap
-- report without evidence cap
-- wrong sensor not satisfying thermal coverage
-- thermal-only anomaly partial credit
-- thermal plus RGB anomaly full credit
-- redundant photo penalty
-- early submission scoring low
-- backward-compatible evidence reports
-- structured evidence reports
-- nonterminal shaping logs
-- process-reward farming resistance
-- cited terminal coverage
-- telemetry-contradicting safety notes
-- low-value versus useful redundancy
-
-Current verification:
-
-```text
-python -m pytest
-20 passed
-
-python examples\run_scripted_agent.py
-reward: 1.0
-done: true
-```
+- wrong sensor cannot satisfy thermal coverage,
+- thermal-only issue evidence gives partial credit,
+- thermal + RGB context gives full issue credit,
+- fake IDs and no-evidence reports trigger integrity caps,
+- contradictory safety notes reduce integrity,
+- low-value duplicates are penalized while useful recaptures are not,
+- repeated harmless calls cannot farm process reward,
+- both legacy and structured report payloads can complete the mission when properly grounded.
