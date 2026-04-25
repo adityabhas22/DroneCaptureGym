@@ -101,36 +101,11 @@ def test_task_observations_do_not_leak_hidden_defects_before_sensing():
             assert defect.defect_type not in state_json
 
 
-# Scripted-policy-solvable subset of the v2 solar task catalog. The legacy
-# scripted solver in examples/run_task_suite.py was authored for the original
-# 16-task suite; the v2 catalog (45 tasks) introduces obstacle-routing,
-# privacy-standoff, and tight-budget variants the scripted helper does not
-# attempt. We iterate just the subset the scripted helper completes with
-# reward > 0.75 — the broader catalog is exercised by the oracle and benchmark
-# tests.
-SCRIPTED_SOLVABLE_TASKS = [
-    "basic_thermal_survey",
-    "anomaly_confirmation",
-    "low_battery_inspection",
-    "multi_anomaly_triage",
-    "no_anomaly_clearance",
-    "obstacle_detour_inspection",
-    "privacy_zone_capture",
-    "thermal_only_anomaly_skip_rgb",
-    "pid_multi_row_pattern",
-    "diode_fault_needs_close_thermal",
-    "bird_soiling_explanation",
-    "vegetation_edge_encroachment",
-    "substation_adjacency_caution",
-    "true_false_anomaly_discrimination",
-    "capture_efficiency_discipline",
-    "no_defect_with_glare_artifact",
-    "audit_grade_strict_grounding",
-    "warranty_claim_evidence_pack",
-    "glare_angle_experiment",
-    "multi_issue_one_rgb_context",
-    "commissioning_acceptance_survey",
-]
+# The spec-aware scripted solver in examples/run_task_suite.py now solves
+# every task in the v2 SOLAR_TASKS catalog with reward > 0.75 across seeds.
+# Iterating the full catalog catches regressions in the solver and in the
+# task definitions themselves.
+SCRIPTED_SOLVABLE_TASKS = sorted(SOLAR_TASKS.keys())
 
 
 def test_scripted_rollout_completes_every_solar_task():

@@ -36,6 +36,7 @@ from dronecaptureops.agent.policies import (
     ScriptedPolicy,
     act,
 )
+from dronecaptureops.agent.spec_aware_policy import SpecAwareScriptedPolicy
 from dronecaptureops.agent.prompts import (
     INTERFACE_VERSION,
     SYSTEM_PROMPT,
@@ -81,6 +82,7 @@ __all__ = [
     "RolloutRunner",
     "RolloutStep",
     "ScriptedPolicy",
+    "SpecAwareScriptedPolicy",
     "TaskOraclePolicy",
     "act",
     "anthropic_tool_schemas",

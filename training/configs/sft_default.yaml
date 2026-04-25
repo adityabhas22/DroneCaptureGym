@@ -11,20 +11,28 @@ output: artifacts/sft/sft-warmstart.jsonl
 # example per policy listed below. 15 is calibrated for the trainer's
 # val_seed_fraction=0.20 — that yields ~3 val seeds per task, enough for
 # stable val_loss measurement while leaving ~12 seeds in train.
-seeds_per_task: 15
+seeds_per_task: 12
 
 # Per-rollout cap. Enough headroom for the full SOLAR_TASKS catalog;
 # task-spec-level max_steps overrides this for tight-budget tasks.
 max_steps: 40
 
-# Policies that produce trajectories. Oracle is canonical; adding
-# `scripted` injects an alternative successful path for tasks both can
-# solve, increasing strategy diversity without adding noise (require_success
-# below filters out failed scripted runs).
+# Policies that produce trajectories.
+#
+# `spec_aware_scripted` is the all-45-task solver in
+# `examples/run_task_suite.py`. It reads from each task's SolarTaskSpec
+# (required_rows, extra_zones, obstacle_schedule, defect weights) and is
+# verified to complete every task at all seeds tested. This is the
+# canonical reference for SFT.
+#
+# We don't add a second policy here. With 45 distinct tasks × 12 seeds
+# the dataset already has substantial mechanic-level diversity; adding a
+# second policy that produces a different *strategy* for the same task
+# helps less than it would on a smaller task set. The legacy `task_oracle`
+# only solves ~20 of 45 and would shrink coverage; `scripted` is a generic
+# heuristic and would mostly fail under `require_success`.
 policies:
-  - name: task_oracle
-    weight: 1
-  - name: scripted
+  - name: spec_aware_scripted
     weight: 1
 
 # Task selection.
@@ -32,32 +40,11 @@ policies:
 # - `include_tasks: [task_a, task_b]` ⇒ only those tasks.
 # - `exclude_tasks` always wins.
 #
-# We list the oracle-solvable subset explicitly. The other 25 tasks in
-# SOLAR_TASKS exist but the legacy oracle can't solve them; leaving them
-# out of SFT keeps the corpus clean (require_success would filter them
-# anyway, but explicit > implicit). Those tasks are reached via PPO
-# exploration. Rationale: docs/sft-task-coverage.md.
-include_tasks:
-  - basic_thermal_survey
-  - anomaly_confirmation
-  - low_battery_inspection
-  - multi_anomaly_triage
-  - no_anomaly_clearance
-  - obstacle_detour_inspection
-  - privacy_zone_capture
-  - thermal_only_anomaly_skip_rgb
-  - pid_multi_row_pattern
-  - diode_fault_needs_close_thermal
-  - bird_soiling_explanation
-  - vegetation_edge_encroachment
-  - substation_adjacency_caution
-  - true_false_anomaly_discrimination
-  - no_defect_with_glare_artifact
-  - audit_grade_strict_grounding
-  - warranty_claim_evidence_pack
-  - glare_angle_experiment
-  - multi_issue_one_rgb_context
-  - commissioning_acceptance_survey
+# null = all 45 tasks. The spec-aware solver covers the full catalog so we
+# no longer need to whitelist a subset (and shouldn't — the goal is for
+# SFT to see the full mechanic distribution so RL can refine, not
+# discover, every category).
+include_tasks: null
 exclude_tasks: []
 
 # Per-task overrides. Optional, sparse, additive on top of the global
@@ -81,15 +68,21 @@ use_tool_calls: false            # JSON-text format (broader model support)
 shuffle: true                    # shuffle output order so SFT epochs don't see tasks in blocks
 shuffle_seed: 1                  # reproducible shuffling
 
-# Held-out tasks (NEVER include in the training set even if they appear in
-# include_tasks). Each holds out a *related but distinct* train task so
-# the model sees the broader mechanic axis without same-task leakage:
-#   - multi_anomaly_triage     ↔ multi_issue_one_rgb_context (both train multi-anomaly)
-#   - audit_grade_strict_grounding ↔ warranty_claim_evidence_pack (both train strict grounding)
-#   - obstacle_detour_inspection ↔ substation_adjacency_caution (both train airspace mechanics)
-#   - glare_angle_experiment   ↔ true_false_anomaly_discrimination (both train false-positive)
+# Held-out tasks (NEVER trained on; written to a separate eval JSONL).
+# Picked to span the seven mechanic families introduced in the v2 suite,
+# one task per family, so cross-task generalisation gets one example each:
+#   1. dynamic-obstacle scheduling → scheduled_crane_window_wait_or_detour
+#   2. honest partial reports     → honest_partial_report_open_items
+#   3. severity-weighted triage   → strict_severity_weighted_triage
+#   4. tight-quality framing      → edge_row_quality_bar
+#   5. privacy-safe alternates    → privacy_safe_alternate_evidence
+#   6. return-margin decisions    → return_margin_decision_point
+#   7. route-replan with extra VPs → route_replan_when_primary_viewpoint_blocked
 held_out_tasks:
-  - multi_anomaly_triage
-  - audit_grade_strict_grounding
-  - obstacle_detour_inspection
-  - glare_angle_experiment
+  - scheduled_crane_window_wait_or_detour
+  - honest_partial_report_open_items
+  - strict_severity_weighted_triage
+  - edge_row_quality_bar
+  - privacy_safe_alternate_evidence
+  - return_margin_decision_point
+  - route_replan_when_primary_viewpoint_blocked

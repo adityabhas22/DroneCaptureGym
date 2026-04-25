@@ -2,82 +2,83 @@
 
 ## TL;DR
 
-- **Train on 16 of 45 tasks** (the oracle-solvable subset minus 4 held-out).
-- **Hold out 4** for cross-task generalisation eval.
-- **25 tasks are RL-only** — the legacy oracle can't solve them. Those mechanics are reached by PPO exploration, not by imitation.
+- **Train on 38 of 45 tasks**. Held-out 7 cover one mechanic family each (cross-task generalisation eval).
+- **All 45 task IDs are now reference-solvable** by the spec-aware scripted solver in `examples/run_task_suite.py`. SFT data covers the full mechanic distribution.
+- **Anti-overfit rules unchanged**: LoRA r=16, 3 epochs max, train/val split by seed inside each train task, early stopping on val_loss.
 
-This is deliberate. The 16 SFT tasks cover the major mechanic axes — battery, multi-anomaly, false-positive, sensor choice, no-defect, airspace, audit grounding — so the model lands at SFT end with the *format* and *broad strategy* nailed, with room to discover the harder mechanics under PPO.
+This replaces the old "20 oracle-solvable + 25 RL-only" split. With the spec-aware solver, every task can produce a clean reference trajectory, so RL only has to *refine* — not *discover* — the mechanic vocabulary.
 
-## The 16 train tasks, by mechanic axis
+## Why this matters for SFT → PPO
 
-| Axis | Task | Mechanic it teaches |
-|---|---|---|
-| Baseline | `basic_thermal_survey` | Standard 5-row thermal sweep + return-home |
-| Battery / efficiency | `low_battery_inspection` | Operate inside 45% init / 35% reserve constraint |
-| Anomaly confirmation | `anomaly_confirmation` | Pair thermal detection with same-row RGB |
-| Anomaly confirmation | `multi_issue_one_rgb_context` | One RGB photo can support two adjacent anomalies |
-| Anomaly confirmation | `thermal_only_anomaly_skip_rgb` | Skip RGB when defect type doesn't require it |
-| Defect taxonomy | `diode_fault_needs_close_thermal` | Bypass-diode invisible from overview, requires close thermal |
-| Defect taxonomy | `bird_soiling_explanation` | Soiling thermal anomaly paired with RGB showing cause |
-| Defect taxonomy | `vegetation_edge_encroachment` | Edge-row shadow needs oblique gimbal + RGB |
-| Defect taxonomy | `pid_multi_row_pattern` | PID degradation across B5–B7 rows |
-| False-positive discrimination | `true_false_anomaly_discrimination` | Discriminate real anomaly vs glare via gimbal pitch |
-| False-positive discrimination | `no_defect_with_glare_artifact` | Verify glare carefully, don't report it |
-| Negative report | `no_anomaly_clearance` | Clean no-defect report without hallucinating issues |
-| Negative report | `commissioning_acceptance_survey` | Strict-grounding clean block with full coverage |
-| Airspace / safety | `privacy_zone_capture` | Capture from outside privacy zone (not inside) |
-| Airspace / safety | `substation_adjacency_caution` | Extra safety buffer beyond hard NFZ |
-| Strict grounding | `warranty_claim_evidence_pack` | 0.70 RGB + 0.90 grounding thresholds |
+A tool used by an unseen-during-SFT mechanic has near-zero prior under the SFT-warm-started policy. Random exploration in an 18-tool action space rarely surfaces the right tool for the right context, so PPO essentially never recovers tools the model never saw. Specifically: `request_route_replan`, `mark_target_inspected`, severity-weighted submission patterns, and partial-report `open_items` are all behaviours the previous oracle never demonstrated.
 
-## The 4 held-out tasks (eval only — never in training set)
+By giving SFT exposure to all 7 mechanic families, PPO inherits a policy with non-zero probability mass on the right tools at the right moments — its job becomes "make the existing strategy more reward-efficient" rather than "discover new strategies from scratch."
 
-| Task | Why held out |
+## The 38 train tasks, by mechanic axis
+
+| Axis | Tasks |
 |---|---|
-| `multi_anomaly_triage` | Cross-task generalisation: separate-RGB-per-anomaly across multiple targets |
-| `audit_grade_strict_grounding` | Tests learned strict-grounding behaviour without same-task data leakage |
-| `obstacle_detour_inspection` | Cross-task generalisation: safety-aware alternative routing |
-| `glare_angle_experiment` | Tests learned discrimination behaviour without same-task data leakage |
+| Baseline coverage | `basic_thermal_survey`, `commissioning_acceptance_survey` |
+| Battery / efficiency | `low_battery_inspection`, `capture_efficiency_discipline`, `quality_vs_efficiency_tradeoff` |
+| Anomaly confirmation | `anomaly_confirmation`, `multi_anomaly_triage`, `multi_issue_one_rgb_context`, `thermal_only_anomaly_skip_rgb`, `thermal_only_fast_clearance` |
+| Defect taxonomy | `diode_fault_needs_close_thermal`, `bird_soiling_explanation`, `vegetation_edge_encroachment`, `pid_multi_row_pattern` |
+| False-positive discrimination | `true_false_anomaly_discrimination`, `no_defect_with_glare_artifact`, `glare_angle_experiment` |
+| Negative report | `no_anomaly_clearance` |
+| Airspace / safety | `privacy_zone_capture`, `substation_adjacency_caution`, `soft_privacy_capture_positioning`, `compound_safety_corridor`, `obstacle_detour_inspection`, `permanent_occlusion_coverage`, `multi_anomaly_routing_under_obstacle` |
+| Strict grounding | `audit_grade_strict_grounding`, `warranty_claim_evidence_pack` |
+| Required-rows scoping | `single_row_reinspection`, `required_rows_subset_priority`, `post_repair_verification`, `minimum_evidence_for_dispatch` |
+| Severity-weighted triage | `prioritized_triage_under_constraint`, `low_severity_ignore_under_budget` |
+| Honest partial reports | `partial_blocked_anomaly_honest_report`, `operator_abort_under_safety_pressure` |
+| Quality-loop / recapture | `inspect_recapture_quality_loop` |
+| Long-standoff zoom | `zoom_required_long_standoff` |
+| Safe-dogleg return | `blocked_return_path_requires_safe_dogleg` |
 
-These were chosen so each held-out task pairs with a *related but distinct* train task — the model has seen the broader mechanic, but not this specific instance.
+Total: 38 distinct task IDs, 13 distinct mechanic axes.
 
-## The 25 RL-only tasks (no SFT data)
+## The 7 held-out tasks (eval only — never in training set)
 
-The legacy `TaskOraclePolicy` solves the 20 tasks above. The remaining 25 introduce mechanics the oracle wasn't designed for: scheduled obstacles, viewpoint replanning, partial-blocked reporting, post-repair verification, return-margin decisions, single-row scope restrictions, etc.
+One per mechanic family the v2 suite introduced. Each held-out task pairs with a related-but-distinct train task so the model has seen the broader axis without same-task data leakage.
 
-Listing them so it's explicit they exist and are not silently ignored:
+| Held-out task | Mechanic family | Closest train pair |
+|---|---|---|
+| `scheduled_crane_window_wait_or_detour` | dynamic-obstacle scheduling | `obstacle_detour_inspection` |
+| `honest_partial_report_open_items` | honest partial reporting | `partial_blocked_anomaly_honest_report` |
+| `strict_severity_weighted_triage` | severity-weighted triage | `prioritized_triage_under_constraint` |
+| `edge_row_quality_bar` | tight-quality framing | `warranty_claim_evidence_pack` |
+| `privacy_safe_alternate_evidence` | privacy-safe alternates | `soft_privacy_capture_positioning` |
+| `return_margin_decision_point` | return-margin decision | `low_battery_inspection` |
+| `route_replan_when_primary_viewpoint_blocked` | route-replan with extra VPs | `permanent_occlusion_coverage` |
 
-```
-inspect_recapture_quality_loop, compound_safety_corridor,
-honest_partial_report_open_items, zoom_required_long_standoff,
-edge_row_quality_bar, soft_privacy_capture_positioning,
-multi_anomaly_routing_under_obstacle, single_row_reinspection,
-strict_severity_weighted_triage, permanent_occlusion_coverage,
-prioritized_triage_under_constraint, capture_efficiency_discipline,
-partial_blocked_anomaly_honest_report, required_rows_subset_priority,
-return_margin_decision_point, route_replan_when_primary_viewpoint_blocked,
-scheduled_crane_window_wait_or_detour, minimum_evidence_for_dispatch,
-post_repair_verification, operator_abort_under_safety_pressure,
-privacy_safe_alternate_evidence, quality_vs_efficiency_tradeoff,
-thermal_only_fast_clearance, low_severity_ignore_under_budget,
-blocked_return_path_requires_safe_dogleg
-```
+## Generation policy
 
-PPO is expected to discover these. The eval harness reports per-task success rates, so we'll see which of the 25 the model picks up purely from RL.
+`spec_aware_scripted` (the solver wrapped as a Policy in `dronecaptureops/agent/spec_aware_policy.py`) is the only policy in the SFT mix. With 45 distinct mechanic types × 12 seeds, the diversity is coming from *task variety* rather than *strategy variety on the same task*. Adding a second policy that produces a different strategy for the same task would dilute, not enrich, the corpus. RL is the right tool to discover alternative strategies.
 
 ## Anti-overfit rationale
 
-A common failure mode for SFT-then-RL: the SFT corpus is so dense and so close to the reward-maximising trajectory that the policy distribution collapses onto the oracle's exact action sequences. PPO then has near-zero entropy to work with and can't explore. We mitigate three ways:
+A common failure mode for SFT → PPO: the SFT corpus is so dense and so close to the reward-maximising trajectory that the policy distribution collapses onto the solver's exact action sequences. PPO then has near-zero entropy to work with and can't explore.
 
-1. **LoRA r=16 + 3-epoch cap** (in `sft_train_default.yaml`) — limits memorisation surface.
-2. **Hold-out 4 tasks entirely** — forces the model to generalise, not just look-up.
-3. **Don't include tasks the oracle can't solve** — better than imitating broken trajectories. RL discovers those mechanics directly.
+We mitigate three ways:
 
-## Dataset shape (expected)
+1. **LoRA r=16 + 3-epoch cap** (`training/configs/sft_train_default.yaml`) — limits memorisation surface to ~1% of model parameters.
+2. **Hold out 7 tasks entirely** — forces the model to generalise across mechanic axes, not just within-seed.
+3. **Reference solver, not oracle** — the spec-aware solver makes deliberate, sometimes-suboptimal choices (e.g., transit via far-east when north blocked) rather than perfect ones. RL has room to find better paths.
 
-Run `python -m training.generate_sft_data --dry-run` for actuals. With `seeds_per_task: 15`, `policies: [task_oracle, scripted]`, and `require_success: true`:
+## Dataset shape (verified)
 
-- Train tasks: 16 × 15 seeds × 2 policies = up to 480 trajectories
-- After `require_success` filter: ~280–360 (scripted has lower task coverage than oracle)
-- After dedup: ~250–320 unique trajectories
-- After `val_seed_fraction=0.20` split: ~200 train, ~50 val
-- Held-out (separate JSONL): 4 × 15 = 60 trajectories
+Run `python -m training.generate_sft_data` for actuals. With `seeds_per_task: 12`, single `spec_aware_scripted` policy, `require_success: true`, dedup on:
+
+| Metric | Value |
+|---|---|
+| Tasks in train set | 38 |
+| Tasks held out | 7 |
+| Raw trajectories generated | 540 (45 tasks × 12 seeds) |
+| Successful (`require_success`) | 540 (100%) |
+| Kept after dedup | 426 |
+| Train JSONL records | 356 |
+| Held-out JSONL records | 70 |
+| After train/val split (val_seed_fraction=0.20) | 283 train / 73 val |
+| All trajectories successful | 426/426 (mean reward 1.000) |
+
+Per-task coverage in train ranges from 2 (when solver is deterministic enough that all 12 seeds produce identical traces — bird_soiling, diode_fault, recapture-loop) to 10 (most tasks). Mean ~9.4 per task.
+
+The lower per-task counts on a handful of tasks reflect that the solver is procedurally identical across seeds when defect placement happens to be invariant. This is a feature, not a bug — duplicate traces would be removed by dedup anyway, and the SFT pipeline is robust to imbalanced per-task counts (each task contributes its mechanic signal once; PPO refines).

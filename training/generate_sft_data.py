@@ -43,6 +43,7 @@ from dronecaptureops.agent import (
     RolloutResult,
     RolloutRunner,
     ScriptedPolicy,
+    SpecAwareScriptedPolicy,
     TaskOraclePolicy,
     trajectory_to_chat_messages,
 )
@@ -192,7 +193,13 @@ def resolve_task_plans(config: SFTGenConfig) -> list[TaskPlan]:
 
 
 def build_policy(name: str, *, task_id: str, seed: int) -> Policy:
+    if name == "spec_aware_scripted":
+        # The spec-aware solver — solves all 45 tasks deterministically from
+        # task spec fields. Preferred reference policy for SFT data generation.
+        return SpecAwareScriptedPolicy(task_id=task_id, seed=seed)
     if name == "task_oracle":
+        # Legacy oracle (only solves ~20 of 45 tasks). Kept for backward compat
+        # with existing eval pipelines that pass it as a comparison baseline.
         return TaskOraclePolicy(task_id=task_id)
     if name == "scripted":
         return ScriptedPolicy()

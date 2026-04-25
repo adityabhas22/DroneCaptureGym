@@ -452,7 +452,11 @@ def parse_args() -> argparse.Namespace:
     )
     # Generation knobs (shared across providers)
     parser.add_argument("--max-history-steps", type=int, default=12)
-    parser.add_argument("--max-tokens", type=int, default=1024)
+    # 16384 is the safe default for any reasoning-mode model (Qwen3 base
+    # variants, DeepSeek-R1, o1) where <think> tokens count against max_tokens
+    # even when the provider strips them from `content`. Non-reasoning models
+    # finish on `tool_calls` long before this cap, so the headroom is free.
+    parser.add_argument("--max-tokens", type=int, default=16384)
     parser.add_argument("--temperature", type=float, default=0.4)
     parser.add_argument("--top-p", type=float, default=0.9)
     # HF-specific
