@@ -20,11 +20,12 @@ class GeometryController(DroneController):
         world.telemetry = Telemetry(
             pose=world.home_pose.model_copy(deep=True),
             gimbal=GimbalState(),
-            battery_pct=100.0,
+            battery_pct=world.initial_battery_pct,
             in_air=False,
             landed=True,
             mode="idle",
         )
+        world.telemetry.battery.level_pct = world.initial_battery_pct
         world.telemetry.autopilot.mode = "idle"
         world.telemetry.autopilot.armed = False
         world.telemetry.autopilot.is_armable = True
@@ -33,7 +34,7 @@ class GeometryController(DroneController):
         world.telemetry.autopilot.command_status = "completed"
         world.telemetry.autopilot.last_command = "reset"
         world.telemetry.weather_band = world.weather.wind_band
-        self._sync_telemetry(world, current_a=0.0)
+        self._set_battery_pct(world, world.initial_battery_pct, current_a=0.0)
 
     def get_telemetry(self, world: EpisodeWorld) -> Telemetry:
         return world.telemetry.model_copy(deep=True)

@@ -26,5 +26,6 @@ class BatteryManagementReward(RewardComponent):
     name = "battery_management"
 
     def compute(self, world: EpisodeWorld) -> float:
-        reserve = world.telemetry.battery_pct - MIN_BATTERY_TO_RETURN_PCT
+        reserve_floor = max(MIN_BATTERY_TO_RETURN_PCT, world.mission.min_battery_at_done_pct)
+        reserve = world.telemetry.battery_pct - reserve_floor
         return round(clamp(reserve / 55.0, 0.0, 1.0), 4)

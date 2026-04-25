@@ -36,7 +36,13 @@ class RewardAggregator:
         checklist_completion = self._checklist_completion(world)
         recovery_behavior = self._recovery_behavior(world)
         penalties = self._penalties(world, format_valid)
-        safety_gate = 0.0 if any("no_fly" in violation or "battery_exhausted" in violation for violation in world.safety_violations) else 1.0
+        safety_gate = 0.0 if any(
+            "no_fly" in violation
+            or "obstacle" in violation
+            or "privacy" in violation
+            or "battery_exhausted" in violation
+            for violation in world.safety_violations
+        ) else 1.0
         total = safety_gate * (
             0.25 * target_coverage
             + 0.20 * capture_quality
@@ -76,9 +82,16 @@ class RewardAggregator:
     def _checklist_completion(self, world: EpisodeWorld) -> float:
         required = set(world.mission.required_rows)
         covered = set(world.checklist_status.thermal_rows_covered)
+        detected = set(world.checklist_status.anomalies_detected)
+        if not world.mission.rgb_closeup_for_anomalies:
+            anomaly_completion = 1.0
+        elif not detected:
+            anomaly_completion = 1.0
+        else:
+            anomaly_completion = len(detected & set(world.checklist_status.anomaly_rgb_pairs)) / len(detected)
         parts = [
             1.0 if required and required <= covered else len(required & covered) / max(len(required), 1),
-            1.0 if not world.checklist_status.anomalies_detected or world.checklist_status.anomaly_rgb_pairs else 0.0,
+            anomaly_completion,
             1.0 if world.checklist_status.returned_home else 0.0,
             1.0 if world.checklist_status.landed else 0.0,
             1.0 if world.checklist_status.evidence_submitted else 0.0,

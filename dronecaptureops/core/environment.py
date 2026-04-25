@@ -46,6 +46,8 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         seed: int | None = None,
         episode_id: str | None = None,
         domain: str = DEFAULT_DOMAIN,
+        task: str | None = None,
+        task_id: str | None = None,
         **_: Any,
     ) -> DroneObservation:
         """Create a reproducible scenario and return the first observation."""
@@ -54,6 +56,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             seed=DEFAULT_SEED if seed is None else seed,
             domain=domain,
             episode_id=episode_id,
+            task_id=task_id or task,
         )
         self._controller.reset(self._world)
         self._rewards.compute(self._world)
@@ -115,6 +118,8 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
             step_count=world.step_count,
             domain=world.domain,
             scenario_seed=world.scenario_seed,
+            task_id=world.mission.task_id,
+            task_name=world.mission.task_name,
             telemetry=world.telemetry.model_copy(deep=True),
             visible_assets=[asset.model_copy(deep=True) for asset in world.assets],
             evidence_artifacts=[artifact.model_copy(deep=True) for artifact in world.evidence_artifacts],
@@ -216,6 +221,7 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         return {
             "mode": world.telemetry.autopilot.mode,
             "armed": world.telemetry.autopilot.armed,
+            "task_id": world.mission.task_id,
             "battery_pct": world.telemetry.battery.level_pct,
             "wind_band": world.telemetry.weather_band,
             "visible_asset_count": len(world.assets),

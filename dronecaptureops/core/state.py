@@ -39,6 +39,8 @@ class EpisodeWorld(BaseModel):
     hidden_weather_details: dict[str, float | str] = Field(default_factory=dict)
     obstacle_schedule: list[dict] = Field(default_factory=list)
     verifier_evidence_requirements: list[dict] = Field(default_factory=list)
+    task_tags: list[str] = Field(default_factory=list)
+    initial_battery_pct: float = 100.0
     weather: WeatherState = Field(default_factory=WeatherState)
     step_count: int = 0
     max_steps: int = 40

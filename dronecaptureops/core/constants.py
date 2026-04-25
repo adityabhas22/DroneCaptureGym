@@ -1,6 +1,7 @@
 """Shared thresholds and defaults for DroneCaptureOps Gym."""
 
 DEFAULT_DOMAIN = "solar"
+DEFAULT_TASK = "basic_thermal_survey"
 DEFAULT_SEED = 7
 DEFAULT_MAX_STEPS = 40
 

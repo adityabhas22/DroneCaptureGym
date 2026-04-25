@@ -299,12 +299,19 @@ class MissionChecklist(BaseModel):
     """Mission requirements that are visible to the agent."""
 
     mission_id: str
+    task_id: str = "basic_thermal_survey"
+    task_name: str = "Basic thermal survey"
     instruction: str
     required_rows: list[str]
     thermal_overview_required: bool = True
     rgb_closeup_for_anomalies: bool = True
     must_return_home: bool = True
     min_battery_at_done_pct: float = 20.0
+    min_capture_quality: float = 0.55
+    min_rgb_quality: float = 0.55
+    min_report_grounding_score: float = 0.6
+    success_criteria: list[str] = Field(default_factory=list)
+    public_constraints: list[str] = Field(default_factory=list)
 
 
 class Capture(BaseModel):
@@ -362,7 +369,9 @@ class ChecklistStatus(BaseModel):
     """Visible progress toward mission completion."""
 
     thermal_rows_covered: list[str] = Field(default_factory=list)
+    thermal_photo_by_row: dict[str, str] = Field(default_factory=dict)
     anomalies_detected: list[str] = Field(default_factory=list)
+    anomaly_targets: dict[str, str] = Field(default_factory=dict)
     anomaly_rgb_pairs: dict[str, str] = Field(default_factory=dict)
     returned_home: bool = False
     landed: bool = False
@@ -446,6 +455,8 @@ class DroneVisibleState(State):
 
     domain: str = ""
     scenario_seed: int = 0
+    task_id: str = "basic_thermal_survey"
+    task_name: str = "Basic thermal survey"
     telemetry: Telemetry | None = None
     visible_assets: list[InspectableAsset] = Field(default_factory=list)
     evidence_artifacts: list[InspectionArtifact] = Field(default_factory=list)

@@ -25,6 +25,7 @@ train = [
 ]
 
 [project.scripts]
+server = "server.app:main"
 dronecaptureops-server = "server.app:main"
 
 [tool.setuptools.packages.find]

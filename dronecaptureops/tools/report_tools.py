@@ -26,16 +26,24 @@ class ReportTools:
         score, warnings = validate_evidence_report(world, report)
         required = set(world.mission.required_rows)
         rows_done = required <= set(world.checklist_status.thermal_rows_covered)
-        anomaly_pairing_done = (
-            not world.checklist_status.anomalies_detected
-            or bool(world.checklist_status.anomaly_rgb_pairs)
+        detected_anomalies = set(world.checklist_status.anomalies_detected)
+        if world.mission.rgb_closeup_for_anomalies:
+            anomaly_pairing_done = detected_anomalies <= set(world.checklist_status.anomaly_rgb_pairs)
+        else:
+            anomaly_pairing_done = True
+        return_done = (
+            not world.mission.must_return_home
+            or (world.checklist_status.returned_home and world.checklist_status.landed)
         )
+        battery_done = world.telemetry.battery.level_pct >= world.mission.min_battery_at_done_pct
+        if not battery_done:
+            warnings.append("battery reserve below mission minimum")
         world.checklist_status.complete = bool(
             rows_done
             and anomaly_pairing_done
-            and world.checklist_status.returned_home
-            and world.checklist_status.landed
-            and score >= 0.6
+            and return_done
+            and battery_done
+            and score >= world.mission.min_report_grounding_score
         )
         world.done = True
         world.termination_reason = "evidence_submitted"

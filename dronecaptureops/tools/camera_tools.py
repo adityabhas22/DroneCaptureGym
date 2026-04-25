@@ -58,21 +58,35 @@ class CameraTools:
         return estimate.model_dump(mode="json") | {"quality_score": estimate.quality_score}
 
     def _capture(self, world: EpisodeWorld, sensor: SensorType, args: dict[str, Any]) -> dict[str, Any]:
+        self._safety.validate_capture(world)
         capture = self._controller.capture_image(world, sensor, args.get("label"))
         self._update_checklist_from_capture(world, capture)
         return capture.model_dump(mode="json") | {"quality_score": capture.quality_score}
 
     def _update_checklist_from_capture(self, world: EpisodeWorld, capture) -> None:
         if capture.sensor == "thermal":
+            threshold = world.mission.min_capture_quality
             covered = set(world.checklist_status.thermal_rows_covered)
             for target_id in capture.targets_visible:
-                if target_id in world.mission.required_rows and capture.quality_score >= 0.55:
+                if target_id in world.mission.required_rows and capture.quality_score >= threshold:
                     covered.add(target_id)
+                    world.checklist_status.thermal_photo_by_row.setdefault(target_id, capture.photo_id)
             world.checklist_status.thermal_rows_covered = sorted(covered)
             anomalies = set(world.checklist_status.anomalies_detected)
-            anomalies.update(capture.detected_anomalies)
+            if capture.quality_score >= threshold:
+                anomalies.update(capture.detected_anomalies)
+                for anomaly in capture.detected_anomalies:
+                    target_id = self._target_for_anomaly(world, anomaly)
+                    if target_id:
+                        world.checklist_status.anomaly_targets.setdefault(anomaly, target_id)
             world.checklist_status.anomalies_detected = sorted(anomalies)
         if capture.sensor == "rgb":
-            for anomaly in world.checklist_status.anomalies_detected:
-                if capture.targets_visible and capture.quality_score >= 0.55:
+            for anomaly, target_id in world.checklist_status.anomaly_targets.items():
+                if target_id in capture.targets_visible and capture.quality_score >= world.mission.min_rgb_quality:
                     world.checklist_status.anomaly_rgb_pairs.setdefault(anomaly, capture.photo_id)
+
+    def _target_for_anomaly(self, world: EpisodeWorld, anomaly: str) -> str | None:
+        for defect in world.hidden_defects:
+            if defect.defect_id == anomaly:
+                return defect.target_id
+        return None

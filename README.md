@@ -8,6 +8,7 @@ The benchmark focus is active visual inspection: deciding what evidence is missi
 
 - Deterministic `FastGeometrySim` style backend through `GeometryController`.
 - Solar inspection MVP with rows `B4-B8`, a substation no-fly zone, seeded hidden defects, weather, and battery use.
+- Fifteen task-conditioned solar RL missions selectable with `reset(..., task="...")`.
 - OpenEnv `reset`, `step`, and visible `state` support.
 - High-level tool registry with schema validation.
 - Safety wrapper before flight/gimbal actions.
@@ -54,6 +55,7 @@ pytest
 ```bash
 python examples/run_scripted_agent.py
 python examples/run_random_agent.py
+python examples/run_task_suite.py
 ```
 
 ## OpenEnv Server
@@ -111,6 +113,18 @@ Rewards are logged as independent components:
 - `recovery_behavior`
 
 The total reward uses a safety gate so serious safety violations cap the episode value. The environment rewards grounded inspection evidence, not just reaching waypoints.
+
+## RL Mission Tasks
+
+The solar domain includes 15 OpenEnv-compatible task variants for training and evaluation, including thermal survey, anomaly confirmation, low battery, bad weather recapture, safety routing, sparse evidence, multi-anomaly triage, privacy-zone capture discipline, rapid survey, and report grounding audit missions.
+
+Use:
+
+```python
+env.reset(seed=7, domain="solar", task="anomaly_confirmation")
+```
+
+See [docs/rl-mission-task-suite.md](docs/rl-mission-task-suite.md) for the full task catalog and verification behavior.
 
 ## Hidden State
 

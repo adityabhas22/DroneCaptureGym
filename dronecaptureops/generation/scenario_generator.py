@@ -23,8 +23,14 @@ class ScenarioGenerator:
             "industrial": IndustrialScenarioBuilder(),
         }
 
-    def build(self, seed: int | None = None, domain: str = DEFAULT_DOMAIN, episode_id: str | None = None) -> EpisodeWorld:
+    def build(
+        self,
+        seed: int | None = None,
+        domain: str = DEFAULT_DOMAIN,
+        episode_id: str | None = None,
+        task_id: str | None = None,
+    ) -> EpisodeWorld:
         if domain not in self._builders:
             supported = ", ".join(sorted(self._builders))
             raise ValueError(f"unsupported domain {domain!r}; supported domains: {supported}")
-        return self._builders[domain].build(seed=normalize_seed(seed), episode_id=episode_id)
+        return self._builders[domain].build(seed=normalize_seed(seed), episode_id=episode_id, task_id=task_id)

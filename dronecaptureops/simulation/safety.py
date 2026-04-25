@@ -37,3 +37,15 @@ class SafetyChecker:
             raise SafetyViolationError(f"invalid_gimbal_pitch:{pitch_deg}")
         if yaw_deg is not None and (yaw_deg < -180.0 or yaw_deg > 180.0):
             raise SafetyViolationError(f"invalid_gimbal_yaw:{yaw_deg}")
+
+    def validate_capture(self, world: EpisodeWorld) -> None:
+        """Block imagery from privacy-sensitive capture zones."""
+
+        pose = world.telemetry.pose
+        for zone in world.airspace_zones:
+            if zone.zone_type != "privacy":
+                continue
+            if pose.z < zone.min_altitude_m or pose.z > zone.max_altitude_m:
+                continue
+            if pose_in_zone(pose, zone):
+                raise SafetyViolationError(f"privacy_capture_violation:{zone.zone_id}")
