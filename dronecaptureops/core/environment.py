@@ -15,7 +15,7 @@ from dronecaptureops.core.errors import ActionValidationError, EpisodeDoneError,
 from dronecaptureops.core.models import DroneObservation, DroneVisibleState, RawDroneAction
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.generation.scenario_generator import ScenarioGenerator
-from dronecaptureops.rewards.reward_aggregator import RewardAggregator
+from dronecaptureops.rewards.reward_aggregator import RewardAggregator, RewardStepContext
 from dronecaptureops.simulation.safety import SafetyChecker
 from dronecaptureops.simulation.world import mark_return_status
 from dronecaptureops.tools import build_tool_registry
@@ -70,6 +70,8 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         message = ""
         error: str | None = None
         result: dict[str, Any] = {}
+        typed_action = self._fallback_action(action)
+        previous_world = world.model_copy(deep=True)
 
         try:
             if world.done:
@@ -97,7 +99,14 @@ class DroneCaptureOpsEnvironment(Environment[RawDroneAction, DroneObservation, D
         world.step_count += 1
         mark_return_status(world)
         self._update_terminal_status(world)
-        breakdown = self._rewards.compute(world, format_valid=format_valid)
+        context = RewardStepContext(
+            previous_world=previous_world,
+            action=typed_action,
+            success=success,
+            format_valid=format_valid,
+            result=result,
+        )
+        breakdown = self._rewards.compute(world, format_valid=format_valid, context=context)
         world.action_log.append(action_to_log(typed_action, success, message))
         observation = self._render_observation(message, error=error, action_result=result)
         observation.reward = breakdown.total

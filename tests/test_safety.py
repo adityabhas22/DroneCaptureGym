@@ -16,7 +16,8 @@ def test_no_fly_crossing_is_blocked_before_motion():
     assert "no_fly" in obs.error
     assert env.state.telemetry.pose.x == 0
     assert env.state.safety_violations
-    assert obs.reward_breakdown.safety_gate == 0.0
+    assert obs.reward_breakdown.safety_gate == 0.1
+    assert obs.reward_breakdown.total <= obs.reward_breakdown.safety_gate
 
 
 def test_invalid_gimbal_is_blocked():

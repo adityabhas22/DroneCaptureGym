@@ -38,5 +38,12 @@ def build_tool_registry(controller: DroneController, safety: SafetyChecker) -> T
     registry.register(ToolSpec("inspect_capture", "Inspect structured metadata for a captured photo.", required={"photo_id"}, handler=camera.inspect_capture))
 
     registry.register(ToolSpec("mark_target_inspected", "Request visible validation that a target has evidence.", required={"target_id"}, optional={"photo_ids"}, handler=inspection.mark_target_inspected))
-    registry.register(ToolSpec("submit_evidence_pack", "Submit final photo-linked evidence pack.", required={"summary", "photo_ids"}, optional={"findings"}, handler=report.submit_evidence_pack))
+    registry.register(
+        ToolSpec(
+            "submit_evidence_pack",
+            "Submit final photo-linked evidence pack.",
+            optional={"summary", "photo_ids", "findings", "mission_status", "evidence", "issues_found", "open_items", "safety_notes"},
+            handler=report.submit_evidence_pack,
+        )
+    )
     return registry

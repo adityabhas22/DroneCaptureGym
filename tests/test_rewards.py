@@ -6,6 +6,23 @@ def act(tool_name: str, **arguments):
     return RawDroneAction(tool_name=tool_name, arguments=arguments)
 
 
+def capture_thermal_overview(env: DroneCaptureOpsEnvironment):
+    env.step(act("takeoff", altitude_m=18))
+    env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
+    env.step(act("fly_to_viewpoint", x=30, y=24, z=18, yaw_deg=-90, speed_mps=5))
+    env.step(act("set_gimbal", pitch_deg=-60, yaw_deg=0))
+    return env.step(act("capture_thermal", label="overview"))
+
+
+def complete_capture_flow(env: DroneCaptureOpsEnvironment):
+    obs = capture_thermal_overview(env)
+    env.step(act("inspect_capture", photo_id=obs.last_capture.photo_id))
+    env.step(act("fly_to_viewpoint", x=30, y=16, z=12, yaw_deg=-90, speed_mps=4))
+    obs = env.step(act("capture_rgb", label="rgb anomaly context"))
+    env.step(act("return_home"))
+    return env.step(act("land"))
+
+
 def test_reward_breakdown_has_expected_shape():
     env = DroneCaptureOpsEnvironment()
     obs = env.reset(seed=7)
@@ -13,6 +30,14 @@ def test_reward_breakdown_has_expected_shape():
     keys = set(obs.reward_breakdown.model_dump())
 
     assert {
+        "evidence_success",
+        "required_coverage",
+        "issue_capture",
+        "operational_efficiency",
+        "grounded_report",
+        "process_reward",
+        "integrity_gate",
+        "value_per_photo",
         "target_coverage",
         "capture_quality",
         "defect_visibility",
@@ -34,3 +59,125 @@ def test_submit_report_rejects_fake_photo_id():
     assert obs.done is True
     assert obs.action_result["accepted"] is False
     assert obs.reward_breakdown.report_grounding < 0.5
+    assert obs.reward_breakdown.integrity_gate == 0.2
+
+
+def test_report_without_evidence_is_capped():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+
+    obs = env.step(act("submit_evidence_pack", summary="complete", photo_ids=[], findings=[]))
+
+    assert obs.action_result["accepted"] is False
+    assert obs.reward_breakdown.integrity_gate == 0.2
+    assert obs.reward_breakdown.total <= 0.2
+
+
+def test_wrong_sensor_does_not_satisfy_thermal_coverage():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+    env.step(act("takeoff", altitude_m=18))
+    env.step(act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5))
+    env.step(act("fly_to_viewpoint", x=30, y=24, z=18, yaw_deg=-90, speed_mps=5))
+    env.step(act("set_gimbal", pitch_deg=-60, yaw_deg=0))
+
+    obs = env.step(act("capture_rgb", label="wrong sensor overview"))
+
+    assert obs.last_capture.sensor == "rgb"
+    assert obs.reward_breakdown.required_coverage == 0.0
+    assert obs.reward_breakdown.target_coverage == 0.0
+
+
+def test_thermal_only_anomaly_gets_partial_issue_credit():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+
+    obs = capture_thermal_overview(env)
+
+    assert obs.reward_breakdown.issue_capture == 0.6
+    assert obs.reward_breakdown.defect_visibility == 0.6
+
+
+def test_thermal_plus_rgb_anomaly_gets_full_issue_credit():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+
+    obs = complete_capture_flow(env)
+
+    assert obs.reward_breakdown.issue_capture == 1.0
+    assert set(obs.checklist_status.anomalies_detected) <= set(obs.checklist_status.anomaly_rgb_pairs)
+
+
+def test_redundant_photo_adds_penalty():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+    capture_thermal_overview(env)
+
+    obs = env.step(act("capture_thermal", label="duplicate overview"))
+
+    assert obs.reward_breakdown.penalties >= 0.02
+
+
+def test_early_submission_cannot_score_highly():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+
+    obs = env.step(act("submit_evidence_pack", summary="done", photo_ids=[], findings=[]))
+
+    assert obs.reward_breakdown.evidence_success < 0.5
+    assert obs.reward_breakdown.total <= 0.2
+
+
+def test_backward_compatible_report_payload_can_complete_mission():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+    obs = complete_capture_flow(env)
+    photo_ids = [capture.photo_id for capture in obs.capture_log]
+    defect_ids = [defect.defect_id for defect in env.debug_world.hidden_defects]
+
+    obs = env.step(
+        act(
+            "submit_evidence_pack",
+            summary=f"Rows inspected. Issues: {' '.join(defect_ids)}. Returned home with battery reserve.",
+            photo_ids=photo_ids,
+            findings=[{"finding": defect_id, "photo_ids": photo_ids} for defect_id in defect_ids],
+            safety_notes=["Returned home with battery reserve."],
+        )
+    )
+
+    assert obs.action_result["accepted"] is True
+    assert obs.reward_breakdown.integrity_gate == 1.0
+    assert obs.reward_breakdown.grounded_report >= 0.75
+
+
+def test_structured_report_payload_can_complete_mission():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=7)
+    obs = complete_capture_flow(env)
+    photo_ids = [capture.photo_id for capture in obs.capture_log]
+    thermal_ids = [capture.photo_id for capture in obs.capture_log if capture.sensor == "thermal"]
+    defect_ids = [defect.defect_id for defect in env.debug_world.hidden_defects]
+
+    obs = env.step(
+        act(
+            "submit_evidence_pack",
+            mission_status="complete",
+            evidence=[
+                {
+                    "requirement_id": "thermal_overview_rows_B4_B8",
+                    "status": "satisfied",
+                    "photo_ids": thermal_ids,
+                }
+            ],
+            issues_found=[
+                {"issue_id": defect_id, "evidence_photo_ids": photo_ids, "recommended_followup": "manual review"}
+                for defect_id in defect_ids
+            ],
+            open_items=[],
+            safety_notes=["Returned home with battery reserve."],
+        )
+    )
+
+    assert obs.action_result["accepted"] is True
+    assert obs.reward_breakdown.integrity_gate == 1.0
+    assert obs.reward_breakdown.grounded_report >= 0.75

@@ -43,6 +43,8 @@ class CameraTools:
         photo_id = args["photo_id"]
         for capture in world.capture_log:
             if capture.photo_id == photo_id:
+                if photo_id not in world.inspected_photo_ids:
+                    world.inspected_photo_ids.append(photo_id)
                 return capture.model_dump(mode="json") | {"quality_score": capture.quality_score}
         return {"error": f"unknown photo_id {photo_id}"}
 
@@ -74,5 +76,7 @@ class CameraTools:
             world.checklist_status.anomalies_detected = sorted(anomalies)
         if capture.sensor == "rgb":
             for anomaly in world.checklist_status.anomalies_detected:
-                if capture.targets_visible and capture.quality_score >= 0.55:
+                defect = next((item for item in world.hidden_defects if item.defect_id == anomaly), None)
+                target_visible = defect is not None and defect.target_id in capture.targets_visible
+                if target_visible and capture.quality_score >= 0.55:
                     world.checklist_status.anomaly_rgb_pairs.setdefault(anomaly, capture.photo_id)

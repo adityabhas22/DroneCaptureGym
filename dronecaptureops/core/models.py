@@ -278,6 +278,13 @@ class HiddenDefect(BaseModel):
     target_id: str
     defect_type: str
     severity: float = Field(ge=0.0, le=1.0)
+    required_sensor: SensorType = "thermal"
+    requires_rgb_context: bool = True
+    min_quality: float = 0.75
+    min_resolution_score: float = 0.70
+    max_occlusion: float = 0.20
+    max_view_angle_deg: float = 55.0
+    weight: float = 2.0
 
 
 class WeatherState(BaseModel):
@@ -353,9 +360,14 @@ class InspectionArtifact(Capture):
 class EvidenceReport(BaseModel):
     """Final evidence pack submitted by the agent."""
 
-    summary: str
+    summary: str = ""
     photo_ids: list[str] = Field(default_factory=list)
     findings: list[dict[str, Any]] = Field(default_factory=list)
+    mission_status: str | None = None
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    issues_found: list[dict[str, Any]] = Field(default_factory=list)
+    open_items: list[dict[str, Any] | str] = Field(default_factory=list)
+    safety_notes: list[str] = Field(default_factory=list)
 
 
 class ChecklistStatus(BaseModel):
@@ -375,6 +387,14 @@ class RewardBreakdown(BaseModel):
 
     format_validity: float = 0.0
     flight_success: float = 0.0
+    evidence_success: float = 0.0
+    required_coverage: float = 0.0
+    issue_capture: float = 0.0
+    operational_efficiency: float = 0.0
+    grounded_report: float = 0.0
+    process_reward: float = 0.0
+    integrity_gate: float = 1.0
+    value_per_photo: float = 0.0
     target_coverage: float = 0.0
     capture_quality: float = 0.0
     defect_visibility: float = 0.0
@@ -387,6 +407,7 @@ class RewardBreakdown(BaseModel):
     penalties: float = 0.0
     safety_gate: float = 1.0
     total: float = 0.0
+    debug: dict[str, Any] = Field(default_factory=dict)
 
 
 class SiteMap(BaseModel):

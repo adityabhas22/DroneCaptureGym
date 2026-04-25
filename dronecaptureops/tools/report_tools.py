@@ -26,9 +26,11 @@ class ReportTools:
         score, warnings = validate_evidence_report(world, report)
         required = set(world.mission.required_rows)
         rows_done = required <= set(world.checklist_status.thermal_rows_covered)
+        detected = set(world.checklist_status.anomalies_detected)
+        paired = set(world.checklist_status.anomaly_rgb_pairs)
         anomaly_pairing_done = (
-            not world.checklist_status.anomalies_detected
-            or bool(world.checklist_status.anomaly_rgb_pairs)
+            not detected
+            or detected <= paired
         )
         world.checklist_status.complete = bool(
             rows_done

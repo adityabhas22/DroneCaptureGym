@@ -53,6 +53,8 @@ class EpisodeWorld(BaseModel):
     checklist_status: ChecklistStatus = Field(default_factory=ChecklistStatus)
     reward_breakdown: RewardBreakdown = Field(default_factory=RewardBreakdown)
     final_report: EvidenceReport | None = None
+    process_reward_total: float = 0.0
+    inspected_photo_ids: list[str] = Field(default_factory=list)
     done: bool = False
     termination_reason: str | None = None
 
