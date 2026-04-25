@@ -51,6 +51,29 @@ class ViewpointSpec:
 
 
 @dataclass(frozen=True)
+class BlockGeometrySpec:
+    """Additional inverter block for multi-block missions.
+
+    The base scenario always builds inverter block B at x=30 with rows
+    B4-B8. Setting `extra_blocks` on a `SolarTaskSpec` adds further
+    blocks at different x-offsets so the agent has to plan flights
+    across blocks (with their own NFZs and viewpoints).
+
+    `rows` lists the asset IDs to add. Their geometry is derived from
+    `center_x` and `y_range` — five rows spaced evenly between y_min
+    and y_max, mirroring block B's layout.
+    """
+
+    block_id: str
+    rows: tuple[str, ...]
+    center_x: float
+    y_range: tuple[float, float] = (-16.0, 16.0)
+    extra_zones: tuple[ZoneSpec, ...] = ()
+    viewpoints: tuple[ViewpointSpec, ...] = ()
+    public_notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SolarTaskSpec:
     """Visible mission and deterministic scenario modifications."""
 
@@ -75,6 +98,7 @@ class SolarTaskSpec:
     must_return_home: bool = True
     extra_zones: tuple[ZoneSpec, ...] = ()
     extra_viewpoints: tuple[ViewpointSpec, ...] = ()
+    extra_blocks: tuple[BlockGeometrySpec, ...] = ()
     verifier_notes: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -435,6 +459,128 @@ SOLAR_TASKS: dict[str, SolarTaskSpec] = {
         task_tags=("report-grounding", "audit", "anomaly"),
         hidden_defects=(DefectSpec("hotspot_B6", "row_B6", "thermal_hotspot", 0.9),),
         min_report_grounding_score=0.75,
+        extra_viewpoints=EAST_RGB_VIEWPOINTS,
+    ),
+    "multi_block_survey": SolarTaskSpec(
+        task_id="multi_block_survey",
+        name="Multi-Block Survey (B + C)",
+        instruction=(
+            "Inspect inverter blocks B and C in the same mission. Capture thermal "
+            "overview evidence for rows B4-B8 AND C4-C8, capture RGB context for any "
+            "detected anomaly on either block, avoid both substation no-fly zones, "
+            "and return home with reserve battery."
+        ),
+        success_criteria=BASE_SUCCESS
+        + (
+            "Cover every row in BOTH blocks B and C with accepted thermal evidence.",
+            "Plan flights between blocks without crossing either substation NFZ.",
+        ),
+        public_constraints=BASE_CONSTRAINTS
+        + ("Block C has its own substation no-fly zone; both must be respected.",),
+        task_tags=("multi-block", "long-horizon", "stretch"),
+        required_rows=(
+            "row_B4", "row_B5", "row_B6", "row_B7", "row_B8",
+            "row_C4", "row_C5", "row_C6", "row_C7", "row_C8",
+        ),
+        hidden_defects=(
+            DefectSpec("hotspot_B6", "row_B6", "thermal_hotspot", 0.88),
+            DefectSpec("hotspot_C5", "row_C5", "thermal_hotspot", 0.85),
+        ),
+        max_steps=80,
+        extra_blocks=(
+            BlockGeometrySpec(
+                block_id="C",
+                rows=("row_C4", "row_C5", "row_C6", "row_C7", "row_C8"),
+                center_x=70.0,
+                y_range=(-16.0, 16.0),
+                extra_zones=(
+                    ZoneSpec(
+                        zone_id="substation_C_nfZ",
+                        label="Block C substation no-fly zone",
+                        min_x=54.0,
+                        min_y=-6.0,
+                        max_x=64.0,
+                        max_y=6.0,
+                        max_altitude_m=80.0,
+                        zone_type="no_fly",
+                        constraint_level="hard",
+                        reason="Block C substation equipment clearance",
+                    ),
+                ),
+                viewpoints=(
+                    ViewpointSpec(
+                        viewpoint_id="vp_block_c_north_overview",
+                        label="Block C north overview covering rows C6-C8",
+                        x=70.0,
+                        y=24.0,
+                        z=22.0,
+                        yaw_deg=-90.0,
+                        asset_ids=("row_C6", "row_C7", "row_C8"),
+                        standoff_bucket="far",
+                        suitable_modalities=("thermal",),
+                        notes=(
+                            "Pitch the gimbal to about -56 degrees to frame rows C6-C8.",
+                            "Pair with vp_block_c_south_overview for full block-C row coverage.",
+                        ),
+                    ),
+                    ViewpointSpec(
+                        viewpoint_id="vp_block_c_south_overview",
+                        label="Block C south overview covering rows C4-C6",
+                        x=70.0,
+                        y=-24.0,
+                        z=22.0,
+                        yaw_deg=90.0,
+                        asset_ids=("row_C4", "row_C5", "row_C6"),
+                        standoff_bucket="far",
+                        suitable_modalities=("thermal",),
+                        notes=(
+                            "Pitch the gimbal to about -56 degrees to frame rows C4-C6.",
+                            "Pair with vp_block_c_north_overview for full block-C row coverage.",
+                        ),
+                    ),
+                    ViewpointSpec(
+                        viewpoint_id="vp_block_c_east_rgb_C5",
+                        label="East RGB close-up for row C5",
+                        x=85.0,
+                        y=-8.0,
+                        z=16.0,
+                        yaw_deg=180.0,
+                        asset_ids=("row_C5",),
+                        standoff_bucket="close",
+                        suitable_modalities=("rgb",),
+                        notes=("Use to confirm anomalies on row C5.",),
+                    ),
+                    ViewpointSpec(
+                        viewpoint_id="vp_block_c_east_rgb_C6",
+                        label="East RGB close-up for row C6",
+                        x=85.0,
+                        y=0.0,
+                        z=16.0,
+                        yaw_deg=180.0,
+                        asset_ids=("row_C6",),
+                        standoff_bucket="close",
+                        suitable_modalities=("rgb",),
+                        notes=("Use to confirm anomalies on row C6.",),
+                    ),
+                    ViewpointSpec(
+                        viewpoint_id="vp_block_c_east_rgb_C7",
+                        label="East RGB close-up for row C7",
+                        x=85.0,
+                        y=8.0,
+                        z=16.0,
+                        yaw_deg=180.0,
+                        asset_ids=("row_C7",),
+                        standoff_bucket="close",
+                        suitable_modalities=("rgb",),
+                        notes=("Use to confirm anomalies on row C7.",),
+                    ),
+                ),
+                public_notes=(
+                    "Block C lies east of block B; transit between blocks via the y>=20 corridor.",
+                ),
+            ),
+        ),
+        # The east RGB viewpoints from block B remain useful for B-row anomalies.
         extra_viewpoints=EAST_RGB_VIEWPOINTS,
     ),
 }

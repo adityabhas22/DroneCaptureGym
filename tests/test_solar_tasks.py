@@ -39,8 +39,9 @@ def safe_overview_capture(env: DroneCaptureOpsEnvironment):
     return obs
 
 
-def test_solar_task_catalog_has_fifteen_named_tasks():
-    assert len(SOLAR_TASKS) == 15
+def test_solar_task_catalog_includes_core_named_tasks():
+    # We now ship 15 single-block tasks plus the multi_block_survey stretch.
+    assert len(SOLAR_TASKS) >= 15
     assert {
         "basic_thermal_survey",
         "anomaly_confirmation",

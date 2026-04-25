@@ -54,12 +54,16 @@ from dronecaptureops.agent.schemas import (
 
 
 def __getattr__(name):  # noqa: ANN001 - PEP 562 lazy import shim
-    """Lazy-load LLM policies so the harness works without openai/anthropic/transformers."""
+    """Lazy-load LLM policies so the harness works without openai/anthropic/transformers/vllm."""
 
     if name in {"OpenAIChatPolicy", "AnthropicMessagesPolicy", "LocalHFPolicy"}:
         from dronecaptureops.agent import llm_policies
 
         return getattr(llm_policies, name)
+    if name in {"VLLMEngine", "VLLMPolicy"}:
+        from dronecaptureops.agent import vllm_policy
+
+        return getattr(vllm_policy, name)
     raise AttributeError(f"module 'dronecaptureops.agent' has no attribute {name!r}")
 
 

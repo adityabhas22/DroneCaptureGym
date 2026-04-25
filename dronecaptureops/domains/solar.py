@@ -215,6 +215,12 @@ class SolarScenarioBuilder(DomainScenarioBuilder):
             telemetry.battery_pct = task.initial_battery_pct
             airspace_zones.extend(_airspace_zones_from_task(task))
             viewpoints.extend(_viewpoints_from_task(task))
+            # Multi-block extension: tasks with `extra_blocks` add another
+            # set of inverter rows + per-block NFZ + per-block viewpoints.
+            extra_assets, extra_zones, extra_viewpoints = _layout_extra_blocks(task, standoff_bands)
+            assets.extend(extra_assets)
+            airspace_zones.extend(extra_zones)
+            viewpoints.extend(extra_viewpoints)
             max_steps = task.max_steps
             mission.required_rows = list(task.required_rows)
             mission.must_return_home = task.must_return_home
@@ -383,14 +389,16 @@ def _mission_from_task(base: MissionChecklist, task: SolarTaskSpec, weather: Wea
 def _hidden_defects_from_task(task: SolarTaskSpec) -> list[HiddenDefect]:
     """Convert deterministic DefectSpec entries into HiddenDefect objects.
 
-    Returns an empty list when the task spec sets `hidden_defects=()` (e.g.
-    `no_anomaly_clearance`). Returns the legacy randomized defects when the
-    spec leaves `hidden_defects=None`. Otherwise applies the task-specific
-    quality threshold so closeup/weather tasks scale the bar appropriately.
+    The task path always overrides scenario_family randomization. Both
+    `hidden_defects=None` (e.g. `basic_thermal_survey`) and `hidden_defects=()`
+    (e.g. `no_anomaly_clearance`) yield no hidden defects; the difference is
+    intent-only. Otherwise the task-specific quality threshold is applied so
+    closeup/weather tasks scale the bar appropriately. The legacy randomized
+    defects path runs only when `task_id is None`.
     """
 
     if task.hidden_defects is None:
-        return []  # task path always overrides; legacy path is taken when task_id is None
+        return []
     defects: list[HiddenDefect] = []
     for spec in task.hidden_defects:
         defects.append(
@@ -459,3 +467,81 @@ def _viewpoints_from_task(task: SolarTaskSpec) -> list[Viewpoint]:
             )
         )
     return viewpoints
+
+
+def _layout_extra_blocks(
+    task: SolarTaskSpec,
+    standoff_bands: list[StandoffBand],
+) -> tuple[list[InspectableAsset], list[AirspaceZone], list[Viewpoint]]:
+    """Materialise multi-block geometry from a task spec.
+
+    Each `BlockGeometrySpec` adds 5 evenly-spaced rows at its `center_x`,
+    plus the block's own NFZ + viewpoints. Layout mirrors block B's
+    convention (rows along the y axis with normal_yaw=180°) so the
+    camera physics behaves identically per block.
+    """
+
+    assets: list[InspectableAsset] = []
+    zones: list[AirspaceZone] = []
+    viewpoints: list[Viewpoint] = []
+    for block in task.extra_blocks:
+        n_rows = len(block.rows)
+        if n_rows == 0:
+            continue
+        y_min, y_max = block.y_range
+        if n_rows == 1:
+            row_y_values = [(y_min + y_max) / 2.0]
+        else:
+            step = (y_max - y_min) / (n_rows - 1)
+            row_y_values = [y_min + idx * step for idx in range(n_rows)]
+        for row_id, center_y in zip(block.rows, row_y_values, strict=True):
+            assets.append(
+                InspectableAsset(
+                    asset_id=row_id,
+                    asset_type="solar_row",
+                    label=f"Solar row {row_id.split('_')[-1]}",
+                    geometry=AssetGeometry(
+                        center_x=block.center_x,
+                        center_y=center_y,
+                        center_z=0.0,
+                        width_m=18.0,
+                        height_m=4.0,
+                        normal_yaw_deg=180.0,
+                        tilt_deg=18.0,
+                    ),
+                    required_modalities=["thermal"],
+                    safe_standoff_bands=standoff_bands,
+                    visibility_tags=["panel_row", f"block_{block.block_id}"],
+                    public_notes=list(block.public_notes)
+                    or ["Thermal overview required", "RGB close-up required if anomaly is detected"],
+                )
+            )
+        for zone_spec in block.extra_zones:
+            zones.append(
+                AirspaceZone(
+                    zone_id=zone_spec.zone_id,
+                    label=zone_spec.label,
+                    min_x=zone_spec.min_x,
+                    min_y=zone_spec.min_y,
+                    max_x=zone_spec.max_x,
+                    max_y=zone_spec.max_y,
+                    min_altitude_m=zone_spec.min_altitude_m,
+                    max_altitude_m=zone_spec.max_altitude_m,
+                    zone_type=zone_spec.zone_type,  # type: ignore[arg-type]
+                    constraint_level=zone_spec.constraint_level,  # type: ignore[arg-type]
+                    reason=zone_spec.reason,
+                )
+            )
+        for vp_spec in block.viewpoints:
+            viewpoints.append(
+                Viewpoint(
+                    viewpoint_id=vp_spec.viewpoint_id,
+                    label=vp_spec.label,
+                    pose=Pose(x=vp_spec.x, y=vp_spec.y, z=vp_spec.z, yaw_deg=vp_spec.yaw_deg),
+                    asset_ids=list(vp_spec.asset_ids),
+                    standoff_bucket=vp_spec.standoff_bucket,  # type: ignore[arg-type]
+                    suitable_modalities=list(vp_spec.suitable_modalities),  # type: ignore[arg-type]
+                    notes=list(vp_spec.notes),
+                )
+            )
+    return assets, zones, viewpoints

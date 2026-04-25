@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 
 from dronecaptureops.agent.policies import AgentContext, Policy, act
 from dronecaptureops.core.models import DroneObservation, RawDroneAction
+from dronecaptureops.tasks.solar_tasks import BlockGeometrySpec, get_solar_task
 
 
 @dataclass
@@ -51,12 +52,18 @@ class TaskOraclePolicy:
     _far_corridor: bool = field(default=False, init=False)
     _bad_weather: bool = field(default=False, init=False)
     _zoom_for_rgb: bool = field(default=False, init=False)
+    _extra_blocks: list[BlockGeometrySpec] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         self._tight_steps = self.task_id in {"limited_steps_rapid_survey"}
         self._far_corridor = self.task_id in {"obstacle_detour_inspection", "safety_constrained_route"}
         self._bad_weather = self.task_id == "bad_weather_recapture"
         self._zoom_for_rgb = self.task_id == "closeup_resolution_challenge"
+        try:
+            spec = get_solar_task(self.task_id)
+            self._extra_blocks = list(spec.extra_blocks)
+        except ValueError:
+            self._extra_blocks = []
 
     # --- public Policy API ---------------------------------------------------
 
@@ -126,10 +133,33 @@ class TaskOraclePolicy:
         steps.append(act("capture_thermal", label="thermal overview B4-B6"))
         if not self._tight_steps:
             steps.append(_inspect_latest_thermal())
+
+        # Extra blocks: same north + south overview pattern at the block's
+        # x-offset. Path between blocks stays in the y=±24 corridor so it
+        # never crosses any substation NFZ.
+        for block in self._extra_blocks:
+            cx = block.center_x
+            steps.append(act("fly_to_viewpoint", x=cx, y=-24, z=22, yaw_deg=90, speed_mps=5))
+            steps.append(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
+            steps.append(act("capture_thermal", label=f"thermal overview {block.block_id} south"))
+            if not self._tight_steps:
+                steps.append(_inspect_latest_thermal())
+            steps.append(act("fly_to_viewpoint", x=cx, y=24, z=22, yaw_deg=-90, speed_mps=5))
+            steps.append(act("set_gimbal", pitch_deg=-56, yaw_deg=0))
+            steps.append(act("capture_thermal", label=f"thermal overview {block.block_id} north"))
+            if not self._tight_steps:
+                steps.append(_inspect_latest_thermal())
         return steps
 
     def _anomaly_sequence(self, observation: DroneObservation) -> list[RawDroneAction]:
-        """RGB close-up for each detected anomaly (when the task asks for it)."""
+        """RGB close-up for each detected anomaly (when the task asks for it).
+
+        Multi-block routing: every RGB site sits east of its block at
+        x=block.center_x+15. Transits between sites stay safe by stepping up
+        to the y=24 corridor at the *previous* x first, traversing at y=24
+        to the new x, then descending. This guarantees no path crosses any
+        block's substation NFZ regardless of block ordering.
+        """
 
         if not observation.mission or not observation.mission.rgb_closeup_for_anomalies:
             return []
@@ -137,15 +167,29 @@ class TaskOraclePolicy:
         steps: list[RawDroneAction] = []
         anomaly_targets = observation.checklist_status.anomaly_targets
         seen: set[str] = set()
+        last_close_x: float | None = None
         for anomaly in observation.checklist_status.anomalies_detected:
             target_id = anomaly_targets.get(anomaly)
             if target_id is None or target_id in seen:
                 continue
             seen.add(target_id)
             target_y = _row_y(observation, target_id)
-            if target_y is None:
+            target_x = _row_x(observation, target_id)
+            if target_y is None or target_x is None:
                 continue
-            steps.append(act("fly_to_viewpoint", x=45, y=target_y, z=16, yaw_deg=180, speed_mps=5))
+            close_x = target_x + 15.0  # east of the row, looking west
+
+            # Inter-block transit: step UP to corridor at the *previous*
+            # close_x first (no x change here, so we never enter an NFZ),
+            # then traverse along y=24 to the new close_x.
+            if last_close_x is not None and abs(last_close_x - close_x) > 1.0:
+                steps.append(act("fly_to_viewpoint", x=last_close_x, y=24, z=22, yaw_deg=-90, speed_mps=5))
+                steps.append(act("fly_to_viewpoint", x=close_x, y=24, z=22, yaw_deg=-90, speed_mps=5))
+            elif last_close_x is None:
+                # First RGB: just stage at corridor of the new x.
+                steps.append(act("fly_to_viewpoint", x=close_x, y=24, z=22, yaw_deg=-90, speed_mps=5))
+            # Descend to target.
+            steps.append(act("fly_to_viewpoint", x=close_x, y=target_y, z=16, yaw_deg=180, speed_mps=5))
             steps.append(act("set_camera_source", source="rgb"))
             steps.append(act("set_gimbal", pitch_deg=-45, yaw_deg=0))
             steps.append(act("capture_rgb", label=f"rgb confirmation {anomaly}"))
@@ -156,29 +200,44 @@ class TaskOraclePolicy:
                 steps.append(act("set_zoom", zoom_level=2.0))
                 steps.append(act("capture_rgb", label=f"rgb zoom {anomaly}"))
                 steps.append(act("set_zoom", zoom_level=1.0))
+            last_close_x = close_x
         return steps
 
     def _return_sequence(self, observation: DroneObservation) -> list[RawDroneAction]:
-        """Dogleg back to home routing around the substation NFZ."""
+        """Dogleg back to home routing around every substation NFZ.
+
+        For multi-block tasks the agent may be east of block C (x ~ 85).
+        We step west via the safe y-corridor until pose.x is at home (x=0),
+        then call return_home + land.
+        """
 
         steps: list[RawDroneAction] = []
         pose = observation.telemetry.pose if observation.telemetry else None
-        # If we're east of the rows (after RGB close-up), step back to x=30.
-        if pose is not None and pose.x > 35:
-            steps.append(act("fly_to_viewpoint", x=30, y=pose.y, z=22, yaw_deg=180, speed_mps=5))
+        if pose is None:
+            steps.append(act("return_home"))
+            steps.append(act("land"))
+            return steps
 
-        use_south = pose is not None and pose.y < -6.0
-        if use_south:
-            if pose is not None and abs(pose.y - (-24.0)) > 1.0:
-                steps.append(act("fly_to_viewpoint", x=30, y=-24, z=22, yaw_deg=90, speed_mps=5))
-            steps.append(act("fly_to_viewpoint", x=0, y=-24, z=18, yaw_deg=180, speed_mps=5))
-        elif self._far_corridor:
-            steps.append(act("fly_to_viewpoint", x=30, y=38, z=22, yaw_deg=-90, speed_mps=5))
-            steps.append(act("fly_to_viewpoint", x=0, y=38, z=18, yaw_deg=180, speed_mps=5))
-        else:
-            if pose is not None and abs(pose.y - 24.0) > 1.0:
-                steps.append(act("fly_to_viewpoint", x=30, y=24, z=22, yaw_deg=-90, speed_mps=5))
-            steps.append(act("fly_to_viewpoint", x=0, y=24, z=18, yaw_deg=180, speed_mps=5))
+        # If we're east of any inverter block, step back along the y-corridor.
+        # Pick the corridor first so we don't have to thread an NFZ.
+        use_south = pose.y < -6.0
+        corridor_y = -24.0 if use_south else (38.0 if self._far_corridor else 24.0)
+        corridor_yaw = 90.0 if use_south else -90.0
+
+        if pose.x > 35.0:
+            # Move along x-axis at the current y first (no NFZ crossing if y is
+            # outside [-6, 6]), then drop down to the corridor.
+            if not (-6.0 <= pose.y <= 6.0):
+                steps.append(act("fly_to_viewpoint", x=30, y=pose.y, z=22, yaw_deg=180, speed_mps=5))
+            else:
+                # Get out of NFZ y-band first, then go west.
+                steps.append(act("fly_to_viewpoint", x=pose.x, y=corridor_y, z=22, yaw_deg=corridor_yaw, speed_mps=5))
+                steps.append(act("fly_to_viewpoint", x=30, y=corridor_y, z=22, yaw_deg=180, speed_mps=5))
+
+        # From x=30, dogleg west via the corridor.
+        if abs(pose.y if pose.x <= 35.0 else corridor_y) - abs(corridor_y) > 1.0 or pose.x > 35.0:
+            steps.append(act("fly_to_viewpoint", x=30, y=corridor_y, z=22, yaw_deg=corridor_yaw, speed_mps=5))
+        steps.append(act("fly_to_viewpoint", x=0, y=corridor_y, z=18, yaw_deg=180, speed_mps=5))
         steps.append(act("return_home"))
         steps.append(act("land"))
         return steps
@@ -272,6 +331,13 @@ def _row_y(observation: DroneObservation, row_id: str) -> float | None:
     for asset in observation.visible_assets or []:
         if asset.asset_id == row_id:
             return asset.center_y
+    return None
+
+
+def _row_x(observation: DroneObservation, row_id: str) -> float | None:
+    for asset in observation.visible_assets or []:
+        if asset.asset_id == row_id:
+            return asset.center_x
     return None
 
 
