@@ -445,19 +445,24 @@ class _Solver:
         if replan:
             recs = self.obs.action_result.get("recommended_viewpoints", []) if self.obs.action_result else []
             alt = self._pick_thermal_alt(recs, prefer_north=True)
-            if alt is not None:
+            if alt is not None and not self._is_blocked(alt["x"], alt["y"], alt["z"]):
                 self._capture_thermal_at(alt["x"], alt["y"], alt["z"], alt["yaw_deg"], label="alt north thermal")
                 return
 
         # 3. Fall back to a known-safe far-north edge viewpoint if the spec ships one.
-        for vp_id in ("vp_block_b_north_alt_edge", "vp_far_north_corridor"):
+        for vp_id in ("vp_block_b_north_alt_edge", "vp_row_b8_north_edge_thermal", "vp_far_north_corridor"):
             if vp_id in self.viewpoints:
                 v = self.viewpoints[vp_id]
                 if not self._is_blocked(v.x, v.y, v.z):
                     self._capture_thermal_at(v.x, v.y, v.z, v.yaw_deg, label=f"alt north thermal ({vp_id})")
                     return
 
-        # 4. Last resort: skip the north overview, accept partial coverage,
+        # 4. Try a generic far-north fallback (30, 32, 22).
+        if not self._is_blocked(30, 32, 22):
+            self._capture_thermal_at(30.0, 32.0, 22.0, -90.0, label="alt north thermal (far-north)")
+            return
+
+        # 5. Last resort: skip the north overview, accept partial coverage,
         #    log it as an open item later.
         unreached_north = [r for r, y in row_ys.items() if y > 0]
         for row in unreached_north:
@@ -466,10 +471,44 @@ class _Solver:
                 "reason": "north overview blocked; no safe alternative",
             })
 
+    def _do_south_thermal_overview(self, row_ys: dict[str, float]) -> None:
+        """South overview with fallback to alt south viewpoints when blocked.
+
+        materials_obstacle_south (compound_safety_corridor) blocks the standard
+        (30, -24, 22) pose; we substitute (30, -30, 24) with a slightly
+        shallower pitch so the FOV still covers B4-B6.
+        """
+
+        sx, sy, sz, syaw = STANDARD_SOUTH_OVERVIEW
+
+        if not self._is_blocked(sx, sy, sz):
+            self._capture_thermal_at(sx, sy, sz, syaw, label=f"south thermal overview {sorted(row_ys)}")
+            return
+
+        # 2. Blocked — try (30, -30, 24) (south of materials zones).
+        for cand in [(30.0, -30.0, 24.0, 90.0, -50.0), (30.0, -30.0, 22.0, 90.0, -50.0), (40.0, -24.0, 22.0, 120.0, -56.0)]:
+            cx, cy, cz, cyaw, cpitch = cand
+            if self._is_blocked(cx, cy, cz):
+                continue
+            self._capture_thermal_at(cx, cy, cz, cyaw, label=f"alt south thermal ({cx},{cy})", pitch=cpitch)
+            return
+
+        # 3. Open-item the south rows.
+        unreached_south = [r for r, y in row_ys.items() if y < 0]
+        for row in unreached_south:
+            self.open_items.append({
+                "row_id": row,
+                "reason": "south overview blocked; no safe alternative",
+            })
+
     def _capture_thermal_at(self, x: float, y: float, z: float, yaw_deg: float, *, label: str, pitch: float = -56.0) -> None:
-        self._step(act("fly_to_viewpoint", x=x, y=y, z=z, yaw_deg=yaw_deg, speed_mps=5))
+        ok = self._safe_fly_to(x, y, z, yaw_deg)
+        if not ok:
+            return
         self._step(act("set_gimbal", pitch_deg=pitch, yaw_deg=0))
         obs = self._step(act("capture_thermal", label=label))
+        if obs.last_capture is None:
+            return
         self.thermal_photos.append(obs.last_capture.photo_id)
         for tid in obs.last_capture.targets_visible:
             self.captures_by_target.setdefault(tid, []).append(obs.last_capture.photo_id)
@@ -581,7 +620,7 @@ class _Solver:
         if self._is_blocked(close_x, close_y, close_z):
             return self._capture_rgb_zoom_fallback(target_id, target_y, anomaly_label)
 
-        if not self._try_step(act("fly_to_viewpoint", x=close_x, y=close_y, z=close_z, yaw_deg=180, speed_mps=5)):
+        if not self._safe_fly_to(close_x, close_y, close_z, 180.0):
             return self._capture_rgb_zoom_fallback(target_id, target_y, anomaly_label)
         self._step(act("set_camera_source", source="rgb"))
         self._step(act("set_gimbal", pitch_deg=-45, yaw_deg=0))
