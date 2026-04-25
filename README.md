@@ -107,6 +107,24 @@ There are two orthogonal selectors and they do different things:
 
 Both go through the same `DroneCaptureOpsEnvironment.reset()` and produce a fully-formed `EpisodeWorld`; they just route through different branches of `SolarScenarioBuilder.build`. A task ID overrides scenario-family defaults when both are passed.
 
+## Training Pipelines
+
+Three scripts wrap the agent harness end-to-end. Each is documented in
+its own dedicated guide; the README links are the source of truth.
+
+```bash
+python -m training.generate_sft_data --config training/configs/sft_default.yaml      # SFT data
+python -m training.sft_warmstart    --config training/configs/sft_train_default.yaml  # SFT warm-start
+python -m training.eval_models      --policy hf --model-id ... --suite hard_eval     # base/SFT eval
+python -m training.train_grpo       --config training/configs/rl_default.yaml         # online RL (GRPO/RLVR)
+python -m training.train_grpo --dry-run                                              # validate plan only
+```
+
+The RL trainer (`train_grpo.py`) is a small custom GRPO/RLVR loop around
+`RolloutRunner` because our episodes are multi-turn tool-calling sessions
+rather than single-shot completions. See [docs/rl-training.md](docs/rl-training.md)
+for config knobs, expected diagnostics, and limitations.
+
 ## OpenEnv Server
 
 ```bash

@@ -1,0 +1,117 @@
+# Online RL trainer config — minimal GRPO-style RLVR loop.
+#
+# This trainer is a thin custom implementation rather than TRL's
+# GRPOTrainer because our episodes are multi-turn tool-calling agents,
+# not single-shot completions. The shape of one update is:
+#
+#   1. Sample (task_id, seed) pairs.
+#   2. For each pair, generate `group_size` rollouts using the current
+#      policy. Each rollout yields multiple (prompt_ids, response_ids)
+#      turns plus a terminal scalar reward from the env.
+#   3. Compute group-relative advantages: A = (r - mean_group) / (std + eps).
+#   4. For each (turn, advantage) pair, compute log p_theta(response | prompt)
+#      under the current policy and (optionally) under a frozen reference
+#      policy. The loss is -E[A * log p] + beta * KL.
+#   5. Optimizer step. Repeat.
+#
+# Cold-start friendly: defaults to a tiny model so the loop runs end-to-end
+# on a laptop GPU or even CPU. Swap to Qwen3-4B once the plumbing is
+# verified.
+
+# --- Model -------------------------------------------------------------------
+
+# Default model is a 0.5B Qwen — smaller than what you'd actually train on,
+# but big enough to emit a parseable tool call most of the time and small
+# enough to run smoke tests anywhere. Switch to Qwen/Qwen3-4B-Instruct-2507
+# (or larger) for real RL.
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+tokenizer_name: null
+
+# Optional: warm-start from an SFT LoRA checkpoint. Recommended once you
+# have one — cold RL on a 0.5B base model rarely produces a parseable
+# tool call within the first few iterations.
+sft_adapter_path: null
+
+# Where checkpoints are written.
+output_dir: artifacts/rl-checkpoints
+
+# --- LoRA --------------------------------------------------------------------
+
+lora:
+  enabled: true
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+# --- Tasks -------------------------------------------------------------------
+
+# Start narrow. The trainer iterates over these tasks round-robin; expand
+# once a 0.5B / 4B / etc. model is reliably producing tool calls.
+train_tasks:
+  - basic_thermal_survey
+  - multi_anomaly_triage
+  - return_margin_decision_point
+  - no_anomaly_clearance
+
+# Tasks reserved for evaluation (never sampled during training rollouts).
+eval_tasks:
+  - honest_partial_report_open_items
+  - edge_row_quality_bar
+
+# --- Sampling / rollouts -----------------------------------------------------
+
+# Per RL iteration, pick `tasks_per_iteration` task IDs (with replacement),
+# `seeds_per_task_iter` seeds per task, and `group_size` rollouts per
+# (task, seed). Total rollouts per iteration =
+#   tasks_per_iteration * seeds_per_task_iter * group_size
+tasks_per_iteration: 2
+seeds_per_task_iter: 1
+group_size: 4
+
+# Cap per rollout. Set per-task in solar_tasks.py via `max_steps`; this
+# is a global ceiling on top of that.
+max_steps_per_episode: 30
+
+# Generation knobs for sampled rollouts.
+max_new_tokens: 384
+temperature: 0.9
+top_p: 0.95
+
+# Reward source: which RewardBreakdown field to use as the trainer's
+# scalar. `total` is the gated terminal reward (recommended); pick a
+# component for ablations.
+reward_field: total
+
+# --- Optimisation ------------------------------------------------------------
+
+learning_rate: 1.0e-5
+weight_decay: 0.0
+max_grad_norm: 1.0
+num_iterations: 10
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 4
+
+# KL penalty against a frozen reference policy. 0.0 disables the
+# reference forward pass (cheaper but lets the model drift further).
+kl_coef: 0.05
+
+# Whether to standardise advantages within each (task, seed) group.
+advantage_normalize: true
+
+# How many gradient passes per RL iteration. >1 is "off-policy" reuse;
+# keep small (1-2) at the start to stay close to PPO/GRPO assumptions.
+ppo_epochs: 1
+
+# --- Logging -----------------------------------------------------------------
+
+logging_steps: 1
+save_every_iterations: 5
+seed: 42
