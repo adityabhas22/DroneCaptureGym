@@ -34,3 +34,16 @@ to bracket the priority dial.
 - Throughput: ~13 toks/s output per request — way below H200's expected 50-100 toks/s for 4B.
 - Hypothesis: 32k max_model_len + LoRA-on-vLLM at gpu_mem=0.4 is causing severe batch-size starvation.
 - Decision: wait one more cron tick. If still no value_loss output by ~35 min in, kill + retune with smaller max_total_length and higher gpu_mem.
+
+### Cron tick 3 (~30 min after submission) — KILLED, RCA done
+- Status: cancelled.
+- Root cause identified by reading log line by line:
+  - vLLM engine init succeeded (LoRA hot-swap enabled, max_lora_rank=64, model loaded, KV cache allocated).
+  - After init: vLLM emitted `Exception in thread Thread-5 (process_input_sockets): msgspec.ValidationError: Expected array, got int` from /usr/local/lib/python3.10/dist-packages/vllm/v1/serial_utils.py:311.
+  - This is in vLLM 0.11.2's V1 engine inter-process serializer. The V1 engine became the default in vllm 0.11.0; V0 is still the LoRA-tested code path.
+  - Result: rollouts silently never complete. Max completions seen across all 25 min: 0/16 (Run 1), 1/16 (Run 2). vLLM "Processed prompts" lines kept ticking but no rollout finished.
+- Fix (no monkey patches):
+  - pyproject [ppo] now pins `vllm>=0.10.0,<0.11.0` (forces V0 engine).
+  - Belt+suspenders: set `VLLM_USE_V1=0` env in the job at submission via --env.
+  - Also synced [ppo] pins with what SFT learned: peft<0.19, trl<1.2, transformers>=4.55.
+- Cost burned: ~30 min × $5/hr × 2 = ~$5. Both accounts: ~$57.50 each remaining.

@@ -40,11 +40,20 @@ train = [
 ppo = [
   "accelerate>=1.10",
   "datasets>=4.0",
-  "peft>=0.17",
-  "trl>=0.23.1",
+  # Sync pins with the [train] extras (SFT learned these the hard way):
+  # - peft 0.19+ imports `transformers.conversion_mapping` (only in tx 4.58+/5.x)
+  # - TRL 1.2+ requires {% generation %} markers in chat template
+  # - transformers 4.55+ has the conversion_mapping module
+  "peft>=0.17,<0.19",
+  "trl>=0.23.1,<1.2",
   "torch>=2.4",
-  "transformers>=4.45",
-  "vllm>=0.6.3",
+  "transformers>=4.55",
+  # vLLM 0.11.x makes the V1 engine default. V1's msgspec serializer rejects
+  # our `LoRARequest` construction with `msgspec.ValidationError: Expected
+  # array, got int`, causing rollouts to silently hang at 0/16 completions.
+  # Pin to 0.10.x (V0 engine) which has stable LoRA hot-swap. Belt-and-
+  # suspenders: also set VLLM_USE_V1=0 in the job env via --env flag.
+  "vllm>=0.10.0,<0.11.0",
   "wandb>=0.18",
 ]
 

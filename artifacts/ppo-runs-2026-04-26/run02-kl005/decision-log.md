@@ -30,3 +30,7 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 - Status: still RUNNING.
 - vLLM completed 1/16 rollouts in 25 min. Same throughput problem as Run 1.
 - Decision: wait one more cron tick; same kill criterion.
+
+### Cron tick 3 (~30 min after submission) — KILLED, same RCA as Run 1
+- Status: cancelled.
+- Same vLLM V1 msgspec.ValidationError stalling rollouts. Same fix being applied.
