@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from dronecaptureops.controllers.base import DroneController
+from dronecaptureops.core.coercion import coerce_float, coerce_str
 from dronecaptureops.core.errors import ActionValidationError
 from dronecaptureops.core.models import Pose
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.simulation.safety import SafetyChecker
+
+
+_STANDOFF_BUCKETS = {"far", "mid", "close"}
 
 
 class FlightTools:
@@ -19,23 +23,23 @@ class FlightTools:
         self._safety = safety
 
     def takeoff(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        altitude_m = float(args["altitude_m"])
+        altitude_m = coerce_float(args, "altitude_m")
         self._safety.validate_takeoff(world, altitude_m)
         return self._controller.takeoff(world, altitude_m)
 
     def fly_to_viewpoint(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
         target = Pose(
-            x=float(args["x"]),
-            y=float(args["y"]),
-            z=float(args["z"]),
-            yaw_deg=float(args.get("yaw_deg", world.telemetry.pose.yaw_deg)),
+            x=coerce_float(args, "x"),
+            y=coerce_float(args, "y"),
+            z=coerce_float(args, "z"),
+            yaw_deg=coerce_float(args, "yaw_deg", default=world.telemetry.pose.yaw_deg),
         )
-        speed = float(args.get("speed_mps", 5.0))
+        speed = coerce_float(args, "speed_mps", default=5.0)
         self._safety.validate_waypoint(world, target, speed)
         return self._controller.fly_to(world, target, speed)
 
     def hover(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        seconds = max(0.0, min(float(args.get("seconds", 1.0)), 60.0))
+        seconds = coerce_float(args, "seconds", default=1.0, minimum=0.0, maximum=60.0)
         return self._controller.hover(world, seconds)
 
     def return_home(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
@@ -48,8 +52,8 @@ class FlightTools:
         return self._controller.land(world)
 
     def move_to_asset(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        asset_id = args["asset_id"]
-        standoff_bucket = args.get("standoff_bucket", "mid")
+        asset_id = coerce_str(args, "asset_id")
+        standoff_bucket = coerce_str(args, "standoff_bucket", default="mid", allowed=_STANDOFF_BUCKETS)
         asset = next((item for item in world.assets if item.asset_id == asset_id), None)
         if asset is None:
             raise ActionValidationError(f"unknown asset_id: {asset_id}")
@@ -74,7 +78,7 @@ class FlightTools:
                 yaw_deg=-90.0,
             )
             viewpoint_id = None
-        speed = float(args.get("speed_mps", 5.0))
+        speed = coerce_float(args, "speed_mps", default=5.0)
         self._safety.validate_waypoint(world, target, speed)
         result = self._controller.fly_to(world, target, speed)
         result.update(

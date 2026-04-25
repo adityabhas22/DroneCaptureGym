@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from dronecaptureops.core.coercion import coerce_str, coerce_str_list
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.utils.math_utils import distance_3d
 
@@ -59,32 +60,88 @@ class InspectionTools:
         }
 
     def request_route_replan(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        reason = args["reason"]
-        blocked_zones = [
-            zone.zone_id
-            for zone in world.airspace_zones
+        from dronecaptureops.simulation.world import active_zones  # local import to avoid cycle
+
+        reason = coerce_str(args, "reason")
+        currently_active = active_zones(world)
+        hard_obstacles = [
+            zone
+            for zone in currently_active
             if zone.zone_type in {"no_fly", "obstacle"} and zone.constraint_level == "hard"
         ]
-        recommendations = [
-            {
-                "viewpoint_id": viewpoint.viewpoint_id,
-                "label": viewpoint.label,
-                "asset_ids": viewpoint.asset_ids,
-                "standoff_bucket": viewpoint.standoff_bucket,
-                "suitable_modalities": viewpoint.suitable_modalities,
-            }
-            for viewpoint in world.viewpoints
-        ]
+        blocked_zones = [zone.zone_id for zone in hard_obstacles]
+        recommendations = []
+        for viewpoint in world.viewpoints:
+            if any(_pose_in_active_zone(viewpoint.pose, zone) for zone in hard_obstacles):
+                continue
+            recommendations.append(
+                {
+                    "viewpoint_id": viewpoint.viewpoint_id,
+                    "label": viewpoint.label,
+                    "asset_ids": viewpoint.asset_ids,
+                    "standoff_bucket": viewpoint.standoff_bucket,
+                    "suitable_modalities": viewpoint.suitable_modalities,
+                    "pose": viewpoint.pose.model_dump(mode="json"),
+                }
+            )
         return {
             "reason": reason,
             "blocked_zone_ids": blocked_zones,
             "recommended_viewpoints": recommendations,
-            "message": "Use named viewpoints that avoid hard no-fly or obstacle zones.",
+            "message": (
+                "These viewpoints lie outside the currently active hard zones."
+                if recommendations
+                else "No viewpoints currently lie outside the active hard zones; consider waiting for an obstacle window to clear."
+            ),
         }
 
     def mark_target_inspected(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        target_id = args["target_id"]
-        real_capture_ids = {capture.photo_id for capture in world.capture_log}
-        cited = [photo_id for photo_id in args.get("photo_ids", []) if photo_id in real_capture_ids]
-        covered = target_id in world.checklist_status.thermal_rows_covered
-        return {"target_id": target_id, "accepted": bool(covered and cited), "cited_photo_ids": cited}
+        """Acknowledge inspection of a target with explicit photo evidence.
+
+        The agent supplies a target_id and a list of photo_ids that justify
+        the inspection. We accept the acknowledgement only when the cited
+        photos exist, the target is visible in at least one of them, and
+        the per-target quality clears MIN_ROW_QUALITY for at least one
+        thermal photo.
+        """
+
+        from dronecaptureops.rewards.verifiers import MIN_ROW_QUALITY  # local import to avoid cycle
+
+        target_id = coerce_str(args, "target_id")
+        cited_ids = coerce_str_list(args, "photo_ids")
+        real_captures = {capture.photo_id: capture for capture in world.capture_log}
+        unknown = [photo_id for photo_id in cited_ids if photo_id not in real_captures]
+        cited = [photo_id for photo_id in cited_ids if photo_id in real_captures]
+        target_known = any(asset.asset_id == target_id for asset in world.assets)
+        thermal_evidence = [
+            real_captures[photo_id]
+            for photo_id in cited
+            if real_captures[photo_id].sensor == "thermal"
+            and target_id in real_captures[photo_id].targets_visible
+            and real_captures[photo_id].target_quality(target_id) >= MIN_ROW_QUALITY
+        ]
+        accepted = bool(target_known and thermal_evidence)
+        if accepted and target_id not in world.checklist_status.targets_acknowledged:
+            world.checklist_status.targets_acknowledged.append(target_id)
+            world.checklist_status.targets_acknowledged.sort()
+        warnings: list[str] = []
+        if not target_known:
+            warnings.append(f"unknown target_id: {target_id}")
+        if unknown:
+            warnings.append(f"unknown photo_ids: {sorted(unknown)}")
+        if target_known and not thermal_evidence:
+            warnings.append("no cited thermal photo proves this target was inspected")
+        return {
+            "target_id": target_id,
+            "accepted": accepted,
+            "cited_photo_ids": cited,
+            "warnings": warnings,
+        }
+
+
+def _pose_in_active_zone(pose, zone) -> bool:
+    return (
+        zone.min_x <= pose.x <= zone.max_x
+        and zone.min_y <= pose.y <= zone.max_y
+        and zone.min_altitude_m <= pose.z <= zone.max_altitude_m
+    )

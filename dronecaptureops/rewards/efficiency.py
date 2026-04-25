@@ -1,4 +1,8 @@
-"""Route efficiency and battery reward components."""
+"""Battery-management reward component.
+
+Route efficiency lives in `verifiers.compute_operational_efficiency`;
+this module only owns the battery-reserve component now.
+"""
 
 from __future__ import annotations
 
@@ -8,23 +12,11 @@ from dronecaptureops.rewards.base import RewardComponent
 from dronecaptureops.utils.math_utils import clamp
 
 
-class RouteEfficiencyReward(RewardComponent):
-    """Rewards collecting evidence without excessive travel."""
-
-    name = "route_efficiency"
-
-    def compute(self, world: EpisodeWorld) -> float:
-        if world.distance_flown_m <= 0:
-            return 0.0
-        efficient_distance = 95.0
-        return round(clamp(1.0 - max(0.0, world.distance_flown_m - efficient_distance) / 150.0, 0.0, 1.0), 4)
-
-
 class BatteryManagementReward(RewardComponent):
     """Rewards returning or finishing with reserve battery."""
 
     name = "battery_management"
 
     def compute(self, world: EpisodeWorld) -> float:
-        reserve = world.telemetry.battery_pct - MIN_BATTERY_TO_RETURN_PCT
+        reserve = world.telemetry.battery.level_pct - MIN_BATTERY_TO_RETURN_PCT
         return round(clamp(reserve / 55.0, 0.0, 1.0), 4)

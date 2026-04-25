@@ -6,12 +6,17 @@ import math
 from typing import Any
 
 from dronecaptureops.controllers.base import DroneController
+from dronecaptureops.core.coercion import coerce_float, coerce_optional_float, coerce_str
 from dronecaptureops.core.errors import ActionValidationError
 from dronecaptureops.core.models import Pose3D, SensorType
 from dronecaptureops.core.state import EpisodeWorld
 from dronecaptureops.simulation.camera import estimate_visible_targets
 from dronecaptureops.simulation.safety import SafetyChecker
 from dronecaptureops.utils.math_utils import bearing_deg, distance_2d
+
+
+_CAMERA_SOURCES: set[str] = {"rgb", "thermal", "rgb_thermal"}
+_SENSOR_OPTIONS: set[str] = {"rgb", "thermal"}
 
 
 class CameraTools:
@@ -22,14 +27,13 @@ class CameraTools:
         self._safety = safety
 
     def set_gimbal(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        pitch = float(args["pitch_deg"])
-        yaw = args.get("yaw_deg")
-        yaw_value = None if yaw is None else float(yaw)
-        self._safety.validate_gimbal(pitch, yaw_value)
-        return self._controller.set_gimbal(world, pitch, yaw_value)
+        pitch = coerce_float(args, "pitch_deg")
+        yaw = coerce_optional_float(args, "yaw_deg")
+        self._safety.validate_gimbal(pitch, yaw)
+        return self._controller.set_gimbal(world, pitch, yaw)
 
     def set_zoom(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        zoom_level = max(1.0, min(float(args["zoom_level"]), 4.0))
+        zoom_level = coerce_float(args, "zoom_level", minimum=1.0, maximum=4.0)
         world.telemetry.camera.zoom_level = zoom_level
         world.telemetry.autopilot.last_command = "set_zoom"
         world.telemetry.autopilot.command_status = "completed"
@@ -37,17 +41,17 @@ class CameraTools:
         return world.telemetry.camera.model_dump(mode="json")
 
     def set_camera_source(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        source = args["source"]
+        source = coerce_str(args, "source", allowed=_CAMERA_SOURCES)
         if source not in world.telemetry.camera.supported_sources:
             raise ActionValidationError(f"unsupported camera source: {source}")
-        world.telemetry.camera.active_source = source
+        world.telemetry.camera.active_source = source  # type: ignore[assignment]
         world.telemetry.autopilot.last_command = "set_camera_source"
         world.telemetry.autopilot.command_status = "completed"
         world.telemetry.sync_legacy_fields()
         return world.telemetry.camera.model_dump(mode="json")
 
     def point_camera_at(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        asset_id = args["asset_id"]
+        asset_id = coerce_str(args, "asset_id")
         asset = next((item for item in world.assets if item.asset_id == asset_id), None)
         if asset is None:
             raise ActionValidationError(f"unknown asset_id: {asset_id}")
@@ -74,7 +78,7 @@ class CameraTools:
         return self._capture(world, "thermal", args)
 
     def inspect_capture(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        photo_id = args["photo_id"]
+        photo_id = coerce_str(args, "photo_id")
         for capture in world.capture_log:
             if capture.photo_id == photo_id:
                 if photo_id not in world.inspected_photo_ids:
@@ -83,7 +87,8 @@ class CameraTools:
         return {"error": f"unknown photo_id {photo_id}"}
 
     def estimate_view(self, world: EpisodeWorld, args: dict[str, Any]) -> dict[str, Any]:
-        sensor: SensorType = args.get("sensor", "thermal")
+        sensor_str = coerce_str(args, "sensor", default="thermal", allowed=_SENSOR_OPTIONS)
+        sensor: SensorType = "thermal" if sensor_str == "thermal" else "rgb"
         estimate = estimate_visible_targets(
             telemetry=world.telemetry,
             targets=world.assets,
@@ -94,8 +99,11 @@ class CameraTools:
         return estimate.model_dump(mode="json") | {"quality_score": estimate.quality_score}
 
     def _capture(self, world: EpisodeWorld, sensor: SensorType, args: dict[str, Any]) -> dict[str, Any]:
+        label_raw = args.get("label")
+        if label_raw is not None and not isinstance(label_raw, str):
+            raise ActionValidationError(f"invalid label: expected string, got {type(label_raw).__name__}")
         world.telemetry.camera.active_source = sensor
-        capture = self._controller.capture_image(world, sensor, args.get("label"))
+        capture = self._controller.capture_image(world, sensor, label_raw)
         self._update_checklist_from_capture(world, capture)
         return capture.model_dump(mode="json") | {"quality_score": capture.quality_score}
 

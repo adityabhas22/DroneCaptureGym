@@ -33,11 +33,14 @@ def main() -> None:
         act("fly_to_viewpoint", x=30, y=-24, z=22, yaw_deg=90, speed_mps=5),
         act("set_gimbal", pitch_deg=-56, yaw_deg=0),
         act("capture_thermal", label="thermal overview B4-B6"),
-        # RGB anomaly context (south side).
+        # RGB anomaly context: south then north so both halves get pairing.
         act("fly_to_viewpoint", x=30, y=-24, z=14, yaw_deg=90, speed_mps=4),
         act("set_camera_source", source="rgb"),
         act("set_gimbal", pitch_deg=-45, yaw_deg=0),
         act("capture_rgb", label="rgb close-up south"),
+        act("fly_to_viewpoint", x=30, y=24, z=14, yaw_deg=-90, speed_mps=4),
+        act("set_gimbal", pitch_deg=-45, yaw_deg=0),
+        act("capture_rgb", label="rgb close-up north"),
         # Return home + land.
         act("fly_to_viewpoint", x=0, y=16, z=18, yaw_deg=0, speed_mps=5),
         act("return_home"),

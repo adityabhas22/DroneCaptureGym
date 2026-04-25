@@ -158,13 +158,27 @@ class RewardAggregator:
         return round(sum(parts) / len(parts), 4)
 
     def _recovery_behavior(self, world: EpisodeWorld) -> float:
+        """Reward both flawless work and active recovery from a bad shot.
+
+        Previously a flawless run scored 0.5 and a recovery scored 1.0 — which
+        perversely punished agents that got it right the first time. Now
+        flawless work scores 1.0; if any low-quality capture exists, full
+        credit requires a later high-quality capture (the recovery), and
+        partial credit (0.3) is given to acknowledge the attempt.
+        """
+
         if not world.capture_log:
             return 0.0
-        low_quality = [capture for capture in world.capture_log if capture.targets_visible and capture.quality_score < 0.55]
-        if not low_quality:
-            return 0.5
-        later_good = any(capture.quality_score >= 0.68 for capture in world.capture_log[len(low_quality):])
-        return 1.0 if later_good else 0.0
+        low_quality_indices = [
+            idx
+            for idx, capture in enumerate(world.capture_log)
+            if capture.targets_visible and capture.quality_score < 0.55
+        ]
+        if not low_quality_indices:
+            return 1.0
+        last_low = low_quality_indices[-1]
+        later_good = any(capture.quality_score >= 0.68 for capture in world.capture_log[last_low + 1:])
+        return 1.0 if later_good else 0.3
 
     def _process_reward(self, world: EpisodeWorld, context: RewardStepContext | None) -> float:
         if context is None:

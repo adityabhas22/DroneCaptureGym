@@ -218,11 +218,19 @@ def compute_evidence_success(world: EpisodeWorld, required_coverage: float, issu
 
 
 def compute_operational_efficiency(world: EpisodeWorld, evidence_success: float) -> float:
-    completion_gate = min(1.0, evidence_success / 0.85)
-    reference_distance = 95.0 + 18.0 * max(len(world.hidden_defects), 1)
-    reference_photo_count = 3.0 + 2.0 * len(world.hidden_defects)
-    reference_time = 140.0 + 25.0 * len(world.hidden_defects)
-    expected_battery_used = 12.0 + 3.0 * len(world.hidden_defects)
+    """Smoothly saturating efficiency score.
+
+    Replaces the previous hard `evidence_success / 0.85` gate (which zeroed
+    efficiency for any agent below 85% complete) with a quadratic gate that
+    still rewards efficient partial progress while concentrating credit on
+    near-complete missions.
+    """
+
+    completion_gate = clamp(evidence_success, 0.0, 1.0) ** 1.5
+    reference_distance = 95.0 + 18.0 * max(len(reportable_defects(world)), 1)
+    reference_photo_count = 3.0 + 2.0 * max(len(reportable_defects(world)), 1)
+    reference_time = 140.0 + 25.0 * max(len(reportable_defects(world)), 1)
+    expected_battery_used = 12.0 + 3.0 * max(len(reportable_defects(world)), 1)
 
     extra_distance = max(0.0, world.distance_flown_m - reference_distance) / max(reference_distance, 1.0)
     extra_photos = max(0.0, len(world.capture_log) - reference_photo_count) / max(reference_photo_count, 1.0)

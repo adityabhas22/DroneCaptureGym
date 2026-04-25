@@ -406,6 +406,7 @@ class ChecklistStatus(BaseModel):
     thermal_rows_covered: list[str] = Field(default_factory=list)
     anomalies_detected: list[str] = Field(default_factory=list)
     anomaly_rgb_pairs: dict[str, str] = Field(default_factory=dict)
+    targets_acknowledged: list[str] = Field(default_factory=list)
     returned_home: bool = False
     landed: bool = False
     evidence_submitted: bool = False
