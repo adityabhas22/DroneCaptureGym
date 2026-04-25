@@ -50,7 +50,9 @@ def test_build_job_spec_sft_defaults():
     )
     assert spec.image == DEFAULT_IMAGE
     assert spec.flavor == DEFAULT_HARDWARE_BY_JOB["sft"]
-    assert spec.timeout == "4h"
+    # Default flavor is the cheap-iteration tier (L40S) for 4B-class workloads.
+    assert spec.flavor == "l40sx1"
+    assert spec.timeout == "2h"
     assert spec.command == ["python", "-m", "training.hf_jobs.entrypoint", "sft"]
     # Both env names get the secret so legacy code paths work.
     assert spec.secrets == {"HF_TOKEN": "hf_fake", "HF_AUTH_TOKEN": "hf_fake"}
@@ -75,7 +77,8 @@ def test_build_job_spec_ppo_uses_longer_timeout():
         config_path_in_repo="training/configs/ppo_train_default.yaml",
         hf_token="hf_fake",
     )
-    assert spec.timeout == "12h"
+    # PPO timeout is longer than SFT (rollouts + value-head training).
+    assert spec.timeout == "6h"
     assert spec.command[-1] == "ppo"
 
 
@@ -294,7 +297,8 @@ def test_submit_calls_run_job_with_job_spec_kwargs():
     mocked.assert_called_once()
     kwargs = mocked.call_args.kwargs
     assert kwargs["image"] == DEFAULT_IMAGE
-    assert kwargs["flavor"] == "h200"
+    # SFT default flavor is L40S (the cheap-iteration tier).
+    assert kwargs["flavor"] == "l40sx1"
     assert kwargs["secrets"]["HF_TOKEN"] == "hf_fake"
     assert kwargs["token"] == "hf_fake"
 
@@ -345,7 +349,8 @@ def test_launch_dry_run_cli_succeeds(tmp_path: Path):
     assert proc.returncode == 0, proc.stderr
     combined = proc.stdout + proc.stderr
     assert "DRY RUN" in combined
-    assert "h200" in combined
+    # Default flavor for SFT is L40S (cheap-iteration tier).
+    assert "l40sx1" in combined
     assert "Qwen/Qwen3-4B-Instruct-2507" in combined
     assert "<redacted>" in combined  # secret not leaked
 

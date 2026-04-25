@@ -16,11 +16,15 @@
 dataset: artifacts/sft/sft-warmstart.jsonl
 output_dir: artifacts/sft-checkpoints
 
-# Base model. Defer the final pick — start with the smallest tool-call
-# capable model that still respects chat templates well. Qwen2.5-3B-Instruct
-# trains in <30 min on a single A100 with LoRA; bump to 7B once the
-# pipeline is proven.
-model_name: Qwen/Qwen2.5-3B-Instruct
+# Base model.
+#
+# Qwen3-4B-Instruct-2507 is the cheap-iteration default — it's the latest
+# Qwen3 4B with thinking-mode-off baked in (no chat_template_kwargs work-
+# around needed) and trains in ~25-35 min on a single L40S with LoRA. It
+# also surfaces every TRL/chat-template bug we'd hit on 32B at ~1/8 the
+# cost. Once the SFT pipeline is reliable here, flip to Qwen3-32B for the
+# real run; the rest of this config carries over unchanged.
+model_name: Qwen/Qwen3-4B-Instruct-2507
 tokenizer_name: null      # null = use model_name's tokenizer
 
 # Train/val split — by seed within each task, then concatenated.

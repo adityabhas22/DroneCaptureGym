@@ -76,12 +76,20 @@ python -m training.hf_jobs.launch ppo \
 
 ## Costs (rough)
 
+The default hardware is **L40S** (`l40sx1`, 48 GB VRAM, $1.80/hr) — the
+cheapest tier that comfortably fits Qwen3-4B-class workloads including
+PPO. Promote to H200 only when scaling to 14B/32B.
+
 | Job | Model | Hardware | Wall time | Cost |
 |---|---|---|---|---|
-| SFT | Qwen3-4B-Instruct-2507 (LoRA) | h200 | ~30 min | ~$2.50 |
+| **SFT (default)** | Qwen3-4B-Instruct-2507 (LoRA) | l40sx1 | ~30 min | ~$0.90 |
+| **PPO (default)** | Qwen3-4B-Instruct-2507 | l40sx1 | ~3-4 hr | ~$5-7 |
 | SFT | Qwen3-32B (QLoRA) | h200 | ~2 hr | ~$10 |
-| PPO | Qwen3-4B-Instruct-2507 | h200 | ~3 hr | ~$15 |
 | PPO | Qwen3-32B (QLoRA) | h200 | ~6-12 hr | ~$30-60 |
+
+Full SFT→PPO lap on Qwen3-4B/L40S: **~$6-8**. That's roughly 8 laps for
+the cost of one 32B/H200 lap, which is exactly the iteration ratio you
+want for debugging the pipeline.
 
 ## Useful CLI flags
 

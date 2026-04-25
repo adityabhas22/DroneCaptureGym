@@ -33,13 +33,24 @@ JobType = Literal["sft", "ppo"]
 DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 
 # Hardware tiers we routinely use, with conservative timeouts.
+#
+# Default flavor is L40S (48 GB VRAM, 864 GB/s memory bandwidth, ~362
+# TFLOPs BF16, $1.80/hr) — the cheapest tier that comfortably fits
+# Qwen3-4B-class workloads INCLUDING PPO (policy + reference + KV cache
+# for rollouts) without QLoRA contortions. This is the iterate-fast-and-
+# cheaply default; one full SFT→PPO lap on Qwen3-4B costs ~$6.
+#
+# When promoting to a 14B/32B run, override on the launch CLI:
+#     --hardware h200          # 1× H200, 141 GB, $5/hr
+#     --hardware h200x2        # 2× H200, 282 GB, $10/hr
+#     --hardware a100-large    # 1× A100, 80 GB, $2.50/hr
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
-    "sft": "h200",      # 4B/14B/32B all fit comfortably with QLoRA
-    "ppo": "h200",      # 32B PPO with shared reference + QLoRA fits H200
+    "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
+    "ppo": "l40sx1",    # 4B PPO: ~3-4 h, ~$5-7 per lap
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
-    "sft": "4h",        # 32B Qwen SFT on ~300 examples is <2h; 4h headroom
-    "ppo": "12h",       # PPO is slower; multi-rollout + value-head training
+    "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
+    "ppo": "6h",        # 4B PPO lands in ~3-4h; 6h headroom
 }
 
 
