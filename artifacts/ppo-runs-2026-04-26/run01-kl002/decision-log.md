@@ -24,3 +24,13 @@ to bracket the priority dial.
 - vLLM emitted one msgspec.ValidationError traceback that engine recovered from — non-fatal.
 - No PPO step lines yet. Estimated first PPO step in ~15-20 min.
 - No decision needed.
+
+### Cron tick 2 (~25 min after submission) — concerning
+- Status: still RUNNING.
+- Total log lines: 868 (unchanged from tick 1).
+- vLLM emitted 15 "Processed prompts" updates and 29 "Adding requests" — engine alive.
+- BUT highest completion count seen: **0/16**. ZERO rollouts have finished.
+- Critic warmup step 1 hasn't completed (no `value_loss=` output).
+- Throughput: ~13 toks/s output per request — way below H200's expected 50-100 toks/s for 4B.
+- Hypothesis: 32k max_model_len + LoRA-on-vLLM at gpu_mem=0.4 is causing severe batch-size starvation.
+- Decision: wait one more cron tick. If still no value_loss output by ~35 min in, kill + retune with smaller max_total_length and higher gpu_mem.

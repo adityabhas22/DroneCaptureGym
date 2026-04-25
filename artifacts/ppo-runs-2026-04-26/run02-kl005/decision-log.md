@@ -25,3 +25,8 @@ climbs >10%, kill and the kl=0.02 run wins by default.
 - Same non-fatal msgspec warning as Run 1.
 - No PPO step lines yet. Estimated first PPO step in ~15-20 min.
 - No decision needed.
+
+### Cron tick 2 (~25 min after submission) — concerning (same as Run 1)
+- Status: still RUNNING.
+- vLLM completed 1/16 rollouts in 25 min. Same throughput problem as Run 1.
+- Decision: wait one more cron tick; same kill criterion.
