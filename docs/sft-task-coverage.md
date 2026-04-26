@@ -2,7 +2,8 @@
 
 ## TL;DR
 
-- **Train on 38 of 45 tasks**. Held-out 7 cover one mechanic family each (cross-task generalisation eval).
+- **SFT data generation trains on 39 of 45 tasks** and writes 6 held-out tasks to the eval JSONL.
+- **PPO training/eval holds out 7 of 45 tasks** by additionally holding out `scheduled_crane_window_wait_or_detour`.
 - **All 45 task IDs are now reference-solvable** by the spec-aware scripted solver in `examples/run_task_suite.py`. SFT data covers the full mechanic distribution.
 - **Anti-overfit rules unchanged**: LoRA r=16, 3 epochs max, train/val split by seed inside each train task, early stopping on val_loss.
 
@@ -12,9 +13,18 @@ This replaces the old "20 oracle-solvable + 25 RL-only" split. With the spec-awa
 
 A tool used by an unseen-during-SFT mechanic has near-zero prior under the SFT-warm-started policy. Random exploration in an 18-tool action space rarely surfaces the right tool for the right context, so PPO essentially never recovers tools the model never saw. Specifically: `request_route_replan`, `mark_target_inspected`, severity-weighted submission patterns, and partial-report `open_items` are all behaviours the previous oracle never demonstrated.
 
-By giving SFT exposure to all 7 mechanic families, PPO inherits a policy with non-zero probability mass on the right tools at the right moments — its job becomes "make the existing strategy more reward-efficient" rather than "discover new strategies from scratch."
+By giving SFT exposure to the full mechanic vocabulary, PPO inherits a policy with non-zero probability mass on the right tools at the right moments — its job becomes "make the existing strategy more reward-efficient" rather than "discover new strategies from scratch."
 
-## The 38 train tasks, by mechanic axis
+## Split source of truth
+
+There are intentionally two splits:
+
+- `training/configs/sft_default.yaml`: 39 train / 6 held out. `scheduled_crane_window_wait_or_detour` stays in SFT train because it is the only time-windowed obstacle task and demonstrates the `hover` wait strategy.
+- `training/configs/ppo_train_default.yaml` and `training/eval_policy.py`: 38 train / 7 held out. PPO/eval additionally holds out `scheduled_crane_window_wait_or_detour` to measure dynamic-obstacle generalisation.
+
+Use the 39/6 numbers when discussing the generated SFT JSONL. Use the 38/7 numbers when discussing PPO train tasks and held-out checkpoint evaluation.
+
+## The 38 PPO train tasks, by mechanic axis
 
 | Axis | Tasks |
 |---|---|
@@ -35,9 +45,9 @@ By giving SFT exposure to all 7 mechanic families, PPO inherits a policy with no
 
 Total: 38 distinct task IDs, 13 distinct mechanic axes.
 
-## The 7 held-out tasks (eval only — never in training set)
+## The 7 PPO/eval held-out tasks
 
-One per mechanic family the v2 suite introduced. Each held-out task pairs with a related-but-distinct train task so the model has seen the broader axis without same-task data leakage.
+One per mechanic family the v2 suite introduced. Each held-out task pairs with a related-but-distinct train task so the model has seen the broader axis without same-task PPO leakage.
 
 | Held-out task | Mechanic family | Closest train pair |
 |---|---|---|
@@ -82,7 +92,7 @@ A common failure mode for SFT → PPO: the SFT corpus is so dense and so close t
 We mitigate three ways:
 
 1. **LoRA r=16 + 3-epoch cap** (`training/configs/sft_train_default.yaml`) — limits memorisation surface to ~1% of model parameters.
-2. **Hold out 7 tasks entirely** — forces the model to generalise across mechanic axes, not just within-seed.
+2. **Hold out task IDs for eval** — SFT generation uses a 39/6 split, while PPO/eval uses a stricter 38/7 split to force cross-task generalisation.
 3. **Reference solver, not oracle** — the spec-aware solver makes deliberate, sometimes-suboptimal choices (e.g., transit via far-east when north blocked) rather than perfect ones. RL has room to find better paths.
 
 ## Dataset shape (verified)

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
+from training.env_utils import hf_token_visible, load_dotenv_if_present, visible_token_names
 from training.ppo.config import PPOTrainConfig
 
 
@@ -34,6 +36,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = REPO_ROOT / "training" / "configs" / "ppo_train_default.yaml"
 
 LOG = logging.getLogger("dronecaptureops.ppo.train")
+
+
+def configure_gpu_runtime_env() -> None:
+    """Set CUDA/vLLM safety env vars before importing torch/vLLM.
+
+    PPO initializes PyTorch in the parent process and then starts vLLM for
+    rollouts. vLLM must therefore use spawn workers; fork can crash with
+    "Cannot re-initialize CUDA in forked subprocess", especially on H200.
+    """
+
+    os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
+    os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+    # PPO LoRA hot-swap currently relies on vLLM V0 behavior. V1 has had
+    # LoRARequest serialization/startup issues on the HF H200 image.
+    os.environ.setdefault("VLLM_USE_V1", "0")
 
 
 def load_config(path: Path | None) -> PPOTrainConfig:
@@ -73,6 +90,11 @@ def parse_args() -> argparse.Namespace:
         "--no-vllm",
         action="store_true",
         help="Validate config + model loading without starting vLLM. Used for unit/CI smoke.",
+    )
+    parser.add_argument(
+        "--allow-fresh-lora",
+        action="store_true",
+        help="Allow PPO to start from a fresh LoRA when no SFT checkpoint is loaded.",
     )
     parser.add_argument(
         "--dry-run",
@@ -129,27 +151,53 @@ def _apply_cli_overrides(config: PPOTrainConfig, args: argparse.Namespace) -> PP
         update["lora"] = config.lora.model_copy(update={"rank": args.lora_rank})
     if args.no_critic_warmup:
         update["critic_warmup"] = config.critic_warmup.model_copy(update={"enabled": False})
+    if args.allow_fresh_lora:
+        update["allow_fresh_lora"] = True
 
     if not update:
         return config
     return config.model_copy(update=update)
 
 
+def _validate_task_ids(config: PPOTrainConfig) -> None:
+    """Refuse to launch with bogus task IDs — discovering this on a GPU is expensive."""
+
+    from dronecaptureops.tasks.solar_tasks import SOLAR_TASKS
+
+    valid = set(SOLAR_TASKS.keys() if isinstance(SOLAR_TASKS, dict) else SOLAR_TASKS)
+    requested: set[str] = set()
+    if config.train_tasks:
+        requested.update(config.train_tasks)
+    if config.eval.held_out_tasks:
+        requested.update(config.eval.held_out_tasks)
+    unknown = sorted(task for task in requested if task not in valid)
+    if unknown:
+        raise SystemExit(
+            "PPO config references unknown task ids: "
+            f"{unknown}. Valid task ids: {sorted(valid)[:5]}... ({len(valid)} total)"
+        )
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    configure_gpu_runtime_env()
+    load_dotenv_if_present(REPO_ROOT / ".env")
     args = parse_args()
     config = _apply_cli_overrides(load_config(args.config), args)
+    _validate_task_ids(config)
 
     LOG.info(
-        "config: model=%s sft=%s steps=%d rollouts/step=%d kl=%.4f actor_lr=%g critic_lr=%g",
+        "config: model=%s sft=%s fresh_lora=%s steps=%d rollouts/step=%d kl=%.4f actor_lr=%g critic_lr=%g",
         config.model_name,
         config.sft_checkpoint or "(none)",
+        config.allow_fresh_lora,
         config.total_steps,
         config.rollout.rollout_batch_size,
         config.algorithm.kl_coef,
         config.optimizer.actor_lr,
         config.optimizer.critic_lr,
     )
+    LOG.info("env: hf_token_visible=%s names=%s", hf_token_visible(), visible_token_names())
 
     if args.dry_run:
         # Resolve which tasks would be trained on, without loading the model.

@@ -1,0 +1,86 @@
+# PPO one-step smoke — first real 4B warm-start validation.
+#
+# Intended launch target:
+#   HF Jobs: --hardware a100-large
+#
+# This config requires the real SFT adapter. It should only be run after the
+# 1.7B/L4-or-L40S infrastructure preflight has already completed.
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+allow_fresh_lora: false
+output_dir: artifacts/ppo-smoke-4b/checkpoints
+
+max_prompt_length: 4096
+max_total_length: 8192
+pad_to_multiple_of: 8
+
+ppo_epochs: 1
+minibatch_size: 1
+micro_batch_size: 1
+total_steps: 1
+save_interval_steps: 1
+log_interval_steps: 1
+
+vllm_gpu_memory_utilization: 0.35
+vllm_max_model_len: 8192
+vllm_dtype: bfloat16
+vllm_enforce_eager: false
+vllm_lora_dir: artifacts/ppo-smoke-4b/lora-cache
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 1.0e-5
+  critic_lr: 1.0e-5
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  scheduler: cosine
+
+algorithm:
+  gamma: 0.99
+  lam: 0.95
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  value_clip: 0.2
+  dual_clip_c: null
+  kl_coef: 0.01
+  kl_estimator: k3
+  entropy_coef: 0.001
+  whiten_advantages: true
+
+rollout:
+  rollout_batch_size: 1
+  max_workers: 1
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens_per_turn: 256
+  max_episode_steps: 8
+  max_history_steps: 4
+
+critic_warmup:
+  enabled: false
+  steps: 0
+  lr_multiplier: 5.0
+
+eval:
+  enabled: false
+  interval_steps: 1
+  held_out_tasks: []
+  seeds_per_task: 1
+  max_episode_steps: 8
+
+train_tasks:
+  - basic_thermal_survey
+seed: 42
+
+wandb_project: dronecaptureops-ppo
+wandb_run_name: smoke-4b-a100
+wandb_mode: disabled

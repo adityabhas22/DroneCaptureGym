@@ -138,10 +138,20 @@ def run_rollout_batch(
         }
         for future in as_completed(futures):
             i = futures[future]
-            outputs[i] = future.result()
+            try:
+                outputs[i] = future.result()
+            except Exception:  # noqa: BLE001
+                LOG.exception(
+                    "rollout permanently failed for spec index %d; dropping from batch", i
+                )
+                outputs[i] = None
 
-    assert all(o is not None for o in outputs)
-    return outputs  # type: ignore[return-value]
+    surviving = [output for output in outputs if output is not None]
+    if not surviving:
+        raise RuntimeError(
+            "every rollout in this batch failed; refusing to continue PPO step"
+        )
+    return surviving  # type: ignore[return-value]
 
 
 __all__ = [

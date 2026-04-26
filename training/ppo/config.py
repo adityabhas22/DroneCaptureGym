@@ -66,12 +66,22 @@ class EvalConfig(BaseModel):
     max_episode_steps: int = 40
 
 
+class ReportingConfig(BaseModel):
+    enabled: bool = True
+    rollouts_jsonl: str = "rollouts/rollouts.jsonl"
+    reports_dir: str = "reports"
+    traces_dir: str = "traces"
+    max_trace_samples_per_step: int = 2
+    include_messages: bool = False
+
+
 class PPOTrainConfig(BaseModel):
     """Top-level config — every knob in one place."""
 
     model_name: str = "Qwen/Qwen2.5-3B-Instruct"
     tokenizer_name: str | None = None
     sft_checkpoint: str | None = None
+    allow_fresh_lora: bool = False
     output_dir: str = "artifacts/ppo-checkpoints"
 
     max_prompt_length: int = 8192
@@ -97,6 +107,7 @@ class PPOTrainConfig(BaseModel):
     rollout: RolloutConfig = Field(default_factory=RolloutConfig)
     critic_warmup: CriticWarmupConfig = Field(default_factory=CriticWarmupConfig)
     eval: EvalConfig = Field(default_factory=EvalConfig)
+    reporting: ReportingConfig = Field(default_factory=ReportingConfig)
 
     train_tasks: list[str] | None = None
     seed: int = 42
@@ -113,5 +124,6 @@ __all__ = [
     "LoRAConfig",
     "OptimizerConfig",
     "PPOTrainConfig",
+    "ReportingConfig",
     "RolloutConfig",
 ]

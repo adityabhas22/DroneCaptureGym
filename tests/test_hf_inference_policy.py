@@ -21,6 +21,7 @@ import pytest
 from dronecaptureops.agent import RolloutRunner
 from dronecaptureops.agent.policies import AgentContext
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
+from dronecaptureops.core.errors import ActionValidationError
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -158,9 +159,10 @@ def test_does_not_retry_on_401_auth_error():
 
     create_mock = MagicMock(side_effect=_FakeOpenAIError("Invalid token", 401))
     policy = _build_policy_with_mock_client(env, create_mock)
-    with pytest.raises(_FakeOpenAIError):
+    with pytest.raises(ActionValidationError, match="Invalid token") as excinfo:
         policy.next_action(obs, AgentContext())
     assert create_mock.call_count == 1
+    assert isinstance(excinfo.value.__cause__, _FakeOpenAIError)
 
 
 def test_exhausts_retries_with_descriptive_error():
@@ -170,10 +172,11 @@ def test_exhausts_retries_with_descriptive_error():
 
     create_mock = MagicMock(side_effect=_FakeOpenAIError("Too many requests", 429))
     policy = _build_policy_with_mock_client(env, create_mock)
-    with pytest.raises(RuntimeError, match="exhausted .* retries"):
+    with pytest.raises(ActionValidationError, match="exhausted .* retries") as excinfo:
         policy.next_action(obs, AgentContext())
-    # max_retries=3 ⇒ 3 attempts.
+    # max_retries=3 -> 3 attempts.
     assert create_mock.call_count == 3
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
 
 
 # ---------------------------------------------------------------------------
@@ -212,8 +215,6 @@ def test_parses_json_text_content_when_no_tool_calls():
 def test_malformed_response_surfaces_as_action_validation_error():
     """No tool_calls + non-JSON content ⇒ ActionValidationError so the
     rollout runner records a parse error (not a silent success)."""
-
-    from dronecaptureops.core.errors import ActionValidationError
 
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=7, task="basic_thermal_survey")

@@ -61,6 +61,12 @@ from training.ppo.rollout_pool import (
     PPORolloutSpec,
     run_rollout_batch,
 )
+from training.ppo.reporting import (
+    append_jsonl,
+    build_training_report,
+    rollout_record,
+    write_step_report,
+)
 from training.ppo.tokenization import (
     TokenizedTrajectory,
     pad_trajectories,
@@ -159,6 +165,8 @@ class PPOTrainer:
         self.lora_cache = Path(config.vllm_lora_dir)
         self.lora_cache.mkdir(parents=True, exist_ok=True)
         self.metrics_path = self.output_dir / "metrics.jsonl"
+        self.rollouts_path = self.output_dir / config.reporting.rollouts_jsonl
+        self.traces_dir = self.output_dir / config.reporting.traces_dir
 
         # Lazy heavyweight imports — keeps tests fast on CPU-only hosts.
         import torch as _torch
@@ -171,7 +179,23 @@ class PPOTrainer:
         self._get_peft_model = get_peft_model
         self._LoraConfig = LoraConfig
 
-        self.device = _torch.device("cuda" if _torch.cuda.is_available() else "cpu")
+        try:
+            _torch.cuda.init()
+            device_count = _torch.cuda.device_count()
+        except Exception as exc:
+            raise RuntimeError(
+                "PPO training requires a fully initialized CUDA runtime. "
+                "CUDA was visible but failed runtime initialization; on HF H200 "
+                "this usually means the GPU fabric is not ready yet."
+            ) from exc
+        if device_count < 1:
+            raise RuntimeError(
+                "PPO training requires CUDA. Refusing to continue on CPU because "
+                "that would silently load the training model in float32 and waste "
+                "remote job time. Check GPU allocation, driver visibility, and "
+                "PYTORCH_NVML_BASED_CUDA_CHECK/VLLM_WORKER_MULTIPROC_METHOD env."
+            )
+        self.device = _torch.device("cuda")
         self.dtype = _torch.bfloat16 if self.device.type == "cuda" else _torch.float32
 
         LOG.info("loading tokenizer: %s", config.tokenizer_name or config.model_name)
@@ -189,7 +213,8 @@ class PPOTrainer:
         )
         base.gradient_checkpointing_enable()
 
-        # Continue from SFT LoRA, or attach a fresh adapter.
+        # Continue from SFT LoRA, or attach a fresh adapter only when the
+        # config explicitly opts into infrastructure-only fresh-LoRA smoke.
         # `sft_checkpoint` can be either a local path OR a Hub repo_id.
         # Subfolder syntax: "repo_id:subfolder" (e.g.,
         # "adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint").
@@ -207,22 +232,27 @@ class PPOTrainer:
                     # Treat as bare Hub repo_id (no subfolder).
                     load_target, load_kwargs = sft_spec, {}
             try:
+                load_kwargs = {**load_kwargs, "torch_device": "cpu"}
                 LOG.info("loading SFT LoRA: %s (kwargs=%s)", load_target, load_kwargs)
                 policy = PeftModel.from_pretrained(base, load_target, is_trainable=True, **load_kwargs)
                 sft_loaded = True
+                LOG.info("loaded SFT LoRA warm-start from %s", sft_spec)
             except Exception as exc:
-                LOG.warning(
-                    "SFT checkpoint %s could not be loaded (%s); falling back to fresh LoRA.",
-                    sft_spec, exc,
-                )
+                if not config.allow_fresh_lora:
+                    raise RuntimeError(
+                        f"SFT checkpoint {sft_spec!r} could not be loaded. "
+                        "Refusing to start PPO from fresh LoRA; set "
+                        "allow_fresh_lora: true only for infrastructure smoke tests."
+                    ) from exc
+                LOG.warning("SFT checkpoint %s could not be loaded (%s); using explicit fresh LoRA.", sft_spec, exc)
         if not sft_loaded:
-            if sft_spec is not None:
-                LOG.warning(
-                    "SFT checkpoint not loaded — attaching a fresh LoRA. "
-                    "Set --sft-checkpoint to a valid local path or Hub repo_id "
-                    "(optionally with :subfolder) to continue from a real warmstart.",
+            if not config.allow_fresh_lora:
+                raise RuntimeError(
+                    "No SFT checkpoint was loaded. Set sft_checkpoint to a valid "
+                    "local path or Hub repo_id, or set allow_fresh_lora: true "
+                    "only for infrastructure smoke tests."
                 )
-            LOG.info("attaching fresh LoRA: r=%d alpha=%d", config.lora.rank, config.lora.alpha)
+            LOG.warning("using explicit fresh LoRA: r=%d alpha=%d", config.lora.rank, config.lora.alpha)
             lora_cfg = LoraConfig(
                 r=config.lora.rank,
                 lora_alpha=config.lora.alpha,
@@ -456,7 +486,9 @@ class PPOTrainer:
 
         if not tokenized:
             LOG.warning("step %d produced 0 trainable trajectories; skipping update", step_idx)
-            return self._summarize_metrics(step_idx, outputs, kept_outputs, t_rollout, 0.0, 0.0)
+            metrics = self._summarize_metrics(step_idx, outputs, kept_outputs, t_rollout, 0.0, 0.0)
+            self._write_rollout_diagnostics(step_idx, metrics, outputs)
+            return metrics
 
         batch = pad_trajectories(tokenized, pad_token_id=self.tokenizer.pad_token_id, device=self.device)
         seq_len = int(batch["input_ids"].shape[1])
@@ -587,6 +619,7 @@ class PPOTrainer:
             metrics.entropy = avg.get("entropy", 0.0)
             metrics.ratio_mean = avg.get("ratio_mean", 1.0)
             metrics.grad_norm = avg.get("grad_norm", 0.0)
+        self._write_rollout_diagnostics(step_idx, metrics, outputs)
         return metrics
 
     # ---------- Aggregation ----------
@@ -667,6 +700,53 @@ class PPOTrainer:
             metrics.update_secs,
         )
 
+    def _write_rollout_diagnostics(
+        self,
+        step_idx: int,
+        metrics: StepMetrics,
+        outputs: list[PPORolloutOutput],
+    ) -> None:
+        """Persist rollout-level evidence used by post-run reports.
+
+        Reporting should not kill an expensive GPU run. If the diagnostic
+        layer has a bug, keep the training job alive and leave an error in
+        the logs so the scalar metrics and checkpoints still upload.
+        """
+
+        if not self.cfg.reporting.enabled:
+            return
+        try:
+            rows = [
+                rollout_record(
+                    output,
+                    step=step_idx,
+                    rollout_index=i,
+                    include_messages=self.cfg.reporting.include_messages,
+                )
+                for i, output in enumerate(outputs)
+            ]
+            append_jsonl(self.rollouts_path, rows)
+            write_step_report(
+                self.output_dir,
+                step=step_idx,
+                metrics=metrics.__dict__,
+                rollouts=rows,
+            )
+            self._write_trace_samples(step_idx, outputs)
+        except Exception:  # noqa: BLE001
+            LOG.exception("failed to write PPO rollout diagnostics for step %d", step_idx)
+
+    def _write_trace_samples(self, step_idx: int, outputs: list[PPORolloutOutput]) -> None:
+        n = max(0, self.cfg.reporting.max_trace_samples_per_step)
+        if n == 0 or not outputs:
+            return
+        from dronecaptureops.evaluation.tracing import write_trace_artifacts
+
+        for i, output in enumerate(outputs[:n]):
+            trace_dir = self.traces_dir / f"step_{step_idx:04d}" / f"rollout_{i:02d}"
+            payload = output.result.model_dump(mode="json")
+            write_trace_artifacts(payload, trace_dir)
+
     # ---------- Top-level fit() ----------
 
     def fit(self) -> None:
@@ -689,6 +769,12 @@ class PPOTrainer:
 
         # Final
         self.save_checkpoint(cfg.total_steps, label="final")
+        if cfg.reporting.enabled:
+            try:
+                build_training_report(self.output_dir)
+                LOG.info("training report written under %s", self.output_dir / "reports")
+            except Exception:  # noqa: BLE001
+                LOG.exception("failed to build PPO training report")
         if self._wandb is not None:
             self._wandb.finish()
 

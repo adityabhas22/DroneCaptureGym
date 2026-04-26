@@ -40,18 +40,18 @@ DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 # for rollouts) without QLoRA contortions. This is the iterate-fast-and-
 # cheaply default; one full SFT→PPO lap on Qwen3-4B costs ~$6.
 #
-# When promoting to a 14B/32B run, override on the launch CLI:
-#     --hardware h200          # 1× H200, 141 GB, $5/hr
-#     --hardware h200x2        # 2× H200, 282 GB, $10/hr
-#     --hardware a100-large    # 1× A100, 80 GB, $2.50/hr
+# Smoke/scale guidance:
+#     --hardware l4x1          # cheapest 1.7B infra smoke, when available
+#     --hardware l40sx1        # cheap fallback smoke tier
+#     --hardware a100-large    # first real 4B one-step PPO smoke
+#     --hardware h200          # only after smoke + tiny PPO are proven
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
-    "ppo": "h200",      # 4B PPO: 1× H200 (141 GB) — vLLM colocate + LoRA
-                        # training fits comfortably; ~7-10 h, ~$35-50/lap.
+    "ppo": "a100-large", # 4B PPO smoke/default: avoid H200 until preflight passes.
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
     "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
-    "ppo": "12h",       # 4B PPO at 100-150 steps lands in 7-10 h; 12h headroom
+    "ppo": "4h",        # Smoke/tiny PPO default; extend explicitly for larger runs.
 }
 
 
@@ -124,6 +124,9 @@ def build_job_spec(
         "DRONECAPTUREOPS_BASE_MODEL": base_model,
         "DRONECAPTUREOPS_CONFIG": config_path_in_repo,
         "PYTHONUNBUFFERED": "1",
+        "PYTORCH_NVML_BASED_CUDA_CHECK": "1",
+        "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
+        "VLLM_USE_V1": "0",
     }
     if extra_env:
         env.update(extra_env)

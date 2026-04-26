@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -54,6 +55,84 @@ def _hf_token() -> str:
             os.environ.setdefault("HF_TOKEN", value)
             return value
     raise SystemExit("no HF token in env; the launcher must pass HF_TOKEN as a secret.")
+
+
+def _configure_gpu_runtime_env() -> None:
+    """Set CUDA/vLLM startup guards before child training processes import torch."""
+
+    os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
+    os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+    os.environ.setdefault("VLLM_USE_V1", "0")
+
+
+def _wait_for_cuda_ready(*, attempts: int | None = None, sleep_secs: int | None = None) -> None:
+    """Wait for HF GPU hosts, especially H200, to finish CUDA fabric init.
+
+    The probe runs in a subprocess so a failed CUDA runtime initialization
+    cannot poison the long-lived entrypoint process. Once it succeeds, the
+    actual trainer still starts in a fresh child process.
+
+    H200 nodes hit a known HF infra bug (huggingface_hub#4128) where the
+    NVIDIA Fabric Manager stays in "In Progress" state indefinitely; on
+    those nodes no amount of waiting will help. We give a generous budget
+    (~12 minutes by default) so healthy nodes finish init reliably while
+    bad nodes still bail before the expensive download/load phase.
+    """
+
+    if attempts is None:
+        attempts = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_ATTEMPTS", "30"))
+    if sleep_secs is None:
+        sleep_secs = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_SLEEP", "25"))
+
+    probe = (
+        "import torch, subprocess; "
+        "torch.cuda.init(); "
+        "n=torch.cuda.device_count(); "
+        "assert n > 0, 'no cuda devices'; "
+        "x=torch.empty(1, device='cuda'); "
+        "print({'cuda_devices': n, 'device': torch.cuda.get_device_name(0)})"
+    )
+    env = os.environ.copy()
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            LOG.info("CUDA readiness probe passed: %s", result.stdout.strip())
+            return
+        LOG.warning(
+            "CUDA readiness probe failed (%d/%d): %s%s",
+            attempt,
+            attempts,
+            result.stderr.strip(),
+            f" | stdout={result.stdout.strip()}" if result.stdout.strip() else "",
+        )
+        # On H200 the Fabric Manager bug never resolves; surface nvidia-smi state
+        # every few attempts so we can distinguish "transient init delay" from
+        # "node is permanently broken" without manual log inspection.
+        if attempt % 5 == 0:
+            try:
+                smi = subprocess.run(
+                    ["nvidia-smi", "-q", "-d", "FABRIC"],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=15,
+                )
+                LOG.warning("nvidia-smi fabric snapshot (attempt %d): %s", attempt, smi.stdout.strip()[:1000])
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("nvidia-smi snapshot failed: %s", exc)
+        if attempt < attempts:
+            time.sleep(sleep_secs)
+    raise SystemExit(
+        "CUDA did not become ready before training; refusing to start expensive run. "
+        "If this is an H200 node, the host likely hit huggingface_hub#4128 (Fabric "
+        "Manager stuck). Re-launch — different node assignment usually recovers."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,12 +234,37 @@ def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, outpu
     """
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    mode = os.environ.get("DRONECAPTUREOPS_PPO_MODE", "train").strip().lower()
+    if mode not in {"train", "preflight"}:
+        raise SystemExit(f"unsupported DRONECAPTUREOPS_PPO_MODE={mode!r}; expected train or preflight")
+    _wait_for_cuda_ready()
+
     train_ppo = repo_dir / "training" / "train_ppo.py"
-    if not train_ppo.exists():
+    preflight_vllm = repo_dir / "training" / "ppo" / "preflight_vllm.py"
+    if mode == "train" and not train_ppo.exists():
         raise SystemExit(
             "training/train_ppo.py is missing from the repo snapshot — "
             "verify the launcher packaged the latest revision."
         )
+    if mode == "preflight" and not preflight_vllm.exists():
+        raise SystemExit(
+            "training/ppo/preflight_vllm.py is missing from the repo snapshot — "
+            "verify the launcher packaged the latest revision."
+        )
+    if mode == "preflight":
+        cmd = [
+            sys.executable,
+            "-m",
+            "training.ppo.preflight_vllm",
+            "--config",
+            str(repo_dir / config_path),
+            "--output",
+            str(output_dir / "preflight-vllm.json"),
+        ]
+        LOG.info("running PPO vLLM preflight: %s", " ".join(cmd))
+        subprocess.check_call(cmd, cwd=str(repo_dir))
+        return
+
     cmd = [
         sys.executable,
         "-m",
@@ -223,6 +327,7 @@ def _push_outputs(token: str, output_repo_id: str, artifact_dirs: list[Path]) ->
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    _configure_gpu_runtime_env()
     parser = argparse.ArgumentParser(description="In-job entrypoint for DroneCaptureOps training on HF Jobs.")
     parser.add_argument("job_type", choices=["sft", "ppo"])
     args, extra = parser.parse_known_args()

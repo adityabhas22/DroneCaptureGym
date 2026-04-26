@@ -70,12 +70,15 @@ def test_build_job_spec_sft_defaults():
     assert spec.env["DRONECAPTUREOPS_DATA_DATASET"] == "user/sft-data"
     assert spec.env["DRONECAPTUREOPS_OUTPUT_REPO"] == "user/sft-out"
     assert spec.env["DRONECAPTUREOPS_BASE_MODEL"] == "Qwen/Qwen3-4B-Instruct-2507"
+    assert spec.env["PYTORCH_NVML_BASED_CUDA_CHECK"] == "1"
+    assert spec.env["VLLM_WORKER_MULTIPROC_METHOD"] == "spawn"
+    assert spec.env["VLLM_USE_V1"] == "0"
     # Labels for filtering jobs in the HF UI later.
     assert spec.labels["project"] == "dronecaptureops"
     assert spec.labels["job_type"] == "sft"
 
 
-def test_build_job_spec_ppo_uses_longer_timeout_and_h200():
+def test_build_job_spec_ppo_uses_a100_smoke_default():
     spec = build_job_spec(
         job_type="ppo",
         repo_dataset_id="user/repo",
@@ -85,12 +88,9 @@ def test_build_job_spec_ppo_uses_longer_timeout_and_h200():
         config_path_in_repo="training/configs/ppo_train_default.yaml",
         hf_token="hf_fake",
     )
-    # PPO timeout is longer than SFT (7-10h rollouts + critic warmup + updates).
-    assert spec.timeout == "12h"
-    # PPO defaults to H200 (141 GB) — comfortable headroom for vLLM colocate
-    # + LoRA training + ref-disabled forward, none of which fits L40S 48 GB
-    # at 32k seqlen.
-    assert spec.flavor == "h200"
+    # PPO defaults to a smoke/tiny-run budget; H200 is reserved for proven runs.
+    assert spec.timeout == "4h"
+    assert spec.flavor == "a100-large"
     assert spec.command[0] == "bash"
     assert "training.hf_jobs.entrypoint ppo" in spec.command[2]
 
@@ -366,6 +366,32 @@ def test_launch_dry_run_cli_succeeds(tmp_path: Path):
     assert "l40sx1" in combined
     assert "Qwen/Qwen3-4B-Instruct-2507" in combined
     assert "<redacted>" in combined  # secret not leaked
+
+
+def test_launch_ppo_preflight_dry_run_includes_env_flag():
+    proc = subprocess.run(
+        [
+            sys.executable, "-m", "training.hf_jobs.launch", "ppo",
+            "--base-model", "Qwen/Qwen3-1.7B",
+            "--output-repo", "u/ppo-preflight",
+            "--config", "training/configs/ppo_smoke_1p7b_l4.yaml",
+            "--hardware", "l40sx1",
+            "--timeout", "1h",
+            "--env", "DRONECAPTUREOPS_PPO_MODE=preflight",
+            "--dry-run",
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**__import__("os").environ, "HF_AUTH_TOKEN": "hf_fake_for_dry_run"},
+    )
+    assert proc.returncode == 0, proc.stderr
+    combined = proc.stdout + proc.stderr
+    assert "DRONECAPTUREOPS_PPO_MODE" in combined
+    assert "preflight" in combined
+    assert "l40sx1" in combined
+    assert "<redacted>" in combined
 
 
 # ---------------------------------------------------------------------------

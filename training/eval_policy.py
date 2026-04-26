@@ -33,7 +33,9 @@ from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
 LOG = logging.getLogger("dronecaptureops.eval")
 
 
-# Default held-out tasks — must stay in sync with sft_default.yaml.
+# Default held-out tasks — must stay in sync with PPO eval held-outs in
+# training/configs/ppo_train_default.yaml. SFT data generation intentionally
+# uses a 39/6 split so it can train on the scheduled-crane hover pattern.
 DEFAULT_HELD_OUT = [
     "scheduled_crane_window_wait_or_detour",
     "honest_partial_report_open_items",

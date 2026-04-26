@@ -452,10 +452,11 @@ def _apply_cli_overrides(config: SFTTrainConfig, args: argparse.Namespace) -> SF
         update["lora"] = config.lora.model_copy(update={"enabled": False})
     if args.no_eval:
         update["val_seed_fraction"] = 0.0
-    if args.hub_model_id is not None:
-        update["hub_model_id"] = args.hub_model_id
+    hub_model_id = getattr(args, "hub_model_id", None)
+    if hub_model_id is not None:
+        update["hub_model_id"] = hub_model_id
         update["push_to_hub"] = True
-    if args.no_push_to_hub:
+    if getattr(args, "no_push_to_hub", False):
         update["push_to_hub"] = False
     if not update:
         return config

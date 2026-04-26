@@ -2,7 +2,7 @@
 
 Usage:
     # Quick smoke (4B model, default H200, dry-run prints the spec without
-    # firing — works without HF Pro):
+    # firing - works without HF Pro):
     python -m training.hf_jobs.launch sft \\
         --base-model Qwen/Qwen3-4B-Instruct-2507 \\
         --sft-data artifacts/sft/sft-warmstart.jsonl \\
@@ -17,12 +17,12 @@ Usage:
         --hardware h200 \\
         --follow
 
-    # PPO from a previously-trained SFT adapter (when the PPO trainer
-    # exists; the launcher path is ready):
+    # First real one-step PPO smoke from a previously-trained SFT adapter:
     python -m training.hf_jobs.launch ppo \\
-        --base-model adityabhaskara/dronecaptureops-sft-qwen3-32b \\
-        --output-repo adityabhaskara/dronecaptureops-ppo-qwen3-32b \\
-        --hardware h200 \\
+        --base-model Qwen/Qwen3-4B-Instruct-2507 \\
+        --output-repo adityabhaskara/dronecaptureops-ppo-smoke-qwen3-4b \\
+        --config training/configs/ppo_smoke_4b_a100.yaml \\
+        --hardware a100-large \\
         --follow
 
 The launcher always:
@@ -55,6 +55,7 @@ from training.hf_jobs.push_artifacts import (
     push_jsonl_dataset,
     push_repo_tarball,
 )
+from training.env_utils import load_dotenv_if_present, visible_token_names
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -89,7 +90,7 @@ def verify_hf_access(token: str) -> dict:
         whoami = api.whoami()
     except Exception as exc:  # noqa: BLE001
         raise AccountError(
-            f"HF whoami() failed — check your HF_TOKEN / HF_AUTH_TOKEN. Underlying error: {exc}"
+            f"HF whoami() failed - check your HF_TOKEN / HF_AUTH_TOKEN. Underlying error: {exc}"
         ) from exc
 
     LOG.info(
@@ -109,7 +110,7 @@ def verify_hf_access(token: str) -> dict:
                 f"  Underlying error: {exc}\n"
                 "  Fix: regenerate or edit your access token at https://huggingface.co/settings/tokens\n"
                 "       and grant `job.read`, `job.write` (and ideally `job.metrics.read`).\n"
-                "  HF Jobs are pay-as-you-go — once the scopes are right and the account has\n"
+                "  HF Jobs are pay-as-you-go - once the scopes are right and the account has\n"
                 "  pre-paid credit (https://huggingface.co/settings/billing) you're set."
             ) from exc
         raise AccountError(
@@ -147,7 +148,7 @@ def submit(spec: JobSpec, *, token: str, dry_run: bool = False, namespace: str |
     """
 
     if dry_run:
-        LOG.info("DRY RUN — would call huggingface_hub.run_job() with:")
+        LOG.info("DRY RUN - would call huggingface_hub.run_job() with:")
         kwargs = spec.to_run_job_kwargs()
         kwargs["secrets"] = {key: "<redacted>" for key in kwargs.get("secrets", {})}
         for key, value in kwargs.items():
@@ -157,6 +158,8 @@ def submit(spec: JobSpec, *, token: str, dry_run: bool = False, namespace: str |
     from huggingface_hub import run_job
 
     kwargs = spec.to_run_job_kwargs()
+    # Older huggingface_hub versions do not accept labels on run_job().
+    kwargs.pop("labels", None)
     kwargs["token"] = token
     if namespace:
         kwargs["namespace"] = namespace
@@ -222,12 +225,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _resolve_token() -> str:
+def _resolve_token(*, required: bool = True) -> str:
+    load_dotenv_if_present(REPO_ROOT / ".env")
     for var in ("HF_TOKEN", "HF_AUTH_TOKEN", "HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
         value = os.environ.get(var)
         if value:
+            LOG.info("using HF token from %s", var)
             return value
-    raise AccountError("No HF token found in env (HF_TOKEN / HF_AUTH_TOKEN / HUGGINGFACE_TOKEN).")
+    if not required:
+        LOG.warning("no HF token found; using a placeholder because --dry-run does not submit")
+        return "hf_dry_run_placeholder"
+    raise AccountError(
+        "No HF token found in env or .env "
+        "(HF_TOKEN / HF_AUTH_TOKEN / HUGGINGFACE_TOKEN / HUGGING_FACE_HUB_TOKEN)."
+    )
 
 
 def _resolve_default_config(job_type: JobType) -> str:
@@ -240,7 +251,8 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     args = parse_args()
 
-    token = _resolve_token()
+    token = _resolve_token(required=not args.dry_run)
+    LOG.info("env: hf_token_visible=%s names=%s", bool(visible_token_names()), visible_token_names())
     whoami = verify_hf_access(token) if not args.dry_run else None
     namespace = args.namespace or (whoami.get("name") if whoami else "<your-namespace>")
 

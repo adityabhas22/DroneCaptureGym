@@ -76,20 +76,21 @@ python -m training.hf_jobs.launch ppo \
 
 ## Costs (rough)
 
-The default hardware is **L40S** (`l40sx1`, 48 GB VRAM, $1.80/hr) — the
-cheapest tier that comfortably fits Qwen3-4B-class workloads including
-PPO. Promote to H200 only when scaling to 14B/32B.
+The default PPO hardware is now **A100** (`a100-large`) so the first real
+4B one-step smoke avoids H200 costs. For the cheapest infrastructure-only
+preflight, override to L4 if available, otherwise L40S. Promote to H200
+only after vLLM preflight, one-step PPO, and a tiny learning run are proven.
 
 | Job | Model | Hardware | Wall time | Cost |
 |---|---|---|---|---|
 | **SFT (default)** | Qwen3-4B-Instruct-2507 (LoRA) | l40sx1 | ~30 min | ~$0.90 |
-| **PPO (default)** | Qwen3-4B-Instruct-2507 | l40sx1 | ~3-4 hr | ~$5-7 |
+| **PPO smoke (cheap)** | Qwen3-1.7B | l4x1 or l40sx1 | <1 hr | cheapest available |
+| **PPO (default)** | Qwen3-4B-Instruct-2507 | a100-large | smoke/tiny only | gated |
 | SFT | Qwen3-32B (QLoRA) | h200 | ~2 hr | ~$10 |
 | PPO | Qwen3-32B (QLoRA) | h200 | ~6-12 hr | ~$30-60 |
 
-Full SFT→PPO lap on Qwen3-4B/L40S: **~$6-8**. That's roughly 8 laps for
-the cost of one 32B/H200 lap, which is exactly the iteration ratio you
-want for debugging the pipeline.
+Do not run a full SFT->PPO lap until the smoke gates in
+`docs/ppo-smoke-runbook.md` pass.
 
 ## Useful CLI flags
 
@@ -114,11 +115,11 @@ hardware. The recommended path:
 
 1. Generate a small SFT dataset (`--seeds-per-task 2`).
 2. Dry-run the launcher to confirm the spec looks right.
-3. Run **one** real job on `--base-model Qwen/Qwen3-4B-Instruct-2507`
-   on `--hardware l40sx1` (~$1.80/hr). The 4B model surfaces every TRL
-   bug you'd hit on the 32B at 1/8th the cost.
-4. Once the 4B job lands cleanly, flip `--base-model Qwen/Qwen3-32B`
-   and `--hardware h200`. The wrapper otherwise is identical.
+3. Run the Qwen3-1.7B infrastructure smoke on `--hardware l4x1` if
+   available, otherwise `--hardware l40sx1`.
+4. Run the first real Qwen3-4B one-step PPO smoke on `--hardware a100-large`.
+5. Only after those pass, consider a tiny learning run. Keep H200 for later
+   scale-up, not smoke debugging.
 
 Step 3 is the cheap insurance for step 4.
 
