@@ -1,0 +1,266 @@
+{
+  "diagnostics": {
+    "Qwen/Qwen3-4B-Instruct-2507": {
+      "checkpoint_completion_rate": {
+        "any_valid_action": 1.0,
+        "captured_rgb": 0.6,
+        "captured_thermal": 1.0,
+        "covered_any_row": 1.0,
+        "detected_any_anomaly": 0.7,
+        "explored_env": 0.0333,
+        "inspected_capture": 0.7333,
+        "landed": 0.7667,
+        "returned_home": 0.7667,
+        "rgb_paired_anomaly": 0.4667,
+        "submission_accepted": 0.3333,
+        "submitted": 0.7667,
+        "took_off": 1.0
+      },
+      "failure_mode_distribution": {
+        "anomaly_unconfirmed": 0.0333,
+        "coverage_incomplete": 0.2667,
+        "no_submit": 0.0667,
+        "ran_out_of_steps": 0.1333,
+        "safety_violation": 0.0667,
+        "submit_rejected": 0.1,
+        "success": 0.3333
+      },
+      "n": 30,
+      "tool_calls_per_episode": {
+        "capture_rgb": 1.0,
+        "capture_thermal": 5.1,
+        "estimate_return_margin": 1.2,
+        "estimate_view": 0.233,
+        "fly_to_viewpoint": 5.4,
+        "get_mission_checklist": 0.033,
+        "inspect_capture": 3.167,
+        "land": 1.0,
+        "mark_target_inspected": 0.033,
+        "move_to_asset": 0.067,
+        "point_camera_at": 0.433,
+        "request_route_replan": 0.333,
+        "return_home": 1.533,
+        "set_camera_source": 3.7,
+        "set_gimbal": 0.067,
+        "set_zoom": 0.067,
+        "submit_evidence_pack": 0.767,
+        "takeoff": 1.0
+      }
+    }
+  },
+  "per_cell": {
+    "Qwen/Qwen3-4B-Instruct-2507::anomaly_confirmation": {
+      "complete_rate": 0.5,
+      "failure_modes": {
+        "submit_rejected": 0.5,
+        "success": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 1.0,
+      "mean_steps": 16,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.5,
+      "task_id": "anomaly_confirmation"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::bad_weather_recapture": {
+      "complete_rate": 1.0,
+      "failure_modes": {
+        "success": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 1.0,
+      "mean_steps": 22.5,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 1.0,
+      "task_id": "bad_weather_recapture"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::basic_thermal_survey": {
+      "complete_rate": 0.5,
+      "failure_modes": {
+        "coverage_incomplete": 0.5,
+        "success": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.8922,
+      "mean_steps": 19.5,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.5,
+      "task_id": "basic_thermal_survey"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::closeup_resolution_challenge": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "coverage_incomplete": 0.5,
+        "safety_violation": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.34635,
+      "mean_steps": 32,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "closeup_resolution_challenge"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::edge_row_focus": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "anomaly_unconfirmed": 0.5,
+        "coverage_incomplete": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.2888,
+      "mean_steps": 37,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "edge_row_focus"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::limited_steps_rapid_survey": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "ran_out_of_steps": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.2,
+      "mean_steps": 14,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "limited_steps_rapid_survey"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::low_battery_inspection": {
+      "complete_rate": 0.5,
+      "failure_modes": {
+        "coverage_incomplete": 0.5,
+        "success": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.876,
+      "mean_steps": 21.5,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.5,
+      "task_id": "low_battery_inspection"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::multi_anomaly_triage": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "coverage_incomplete": 0.5,
+        "submit_rejected": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.36595,
+      "mean_steps": 33.5,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "multi_anomaly_triage"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::no_anomaly_clearance": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "coverage_incomplete": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.4,
+      "mean_steps": 25,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "no_anomaly_clearance"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::obstacle_detour_inspection": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "no_submit": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.0,
+      "mean_steps": 27,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "obstacle_detour_inspection"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::privacy_zone_capture": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "coverage_incomplete": 0.5,
+        "safety_violation": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.36475,
+      "mean_steps": 26,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "privacy_zone_capture"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::report_grounding_audit": {
+      "complete_rate": 1.0,
+      "failure_modes": {
+        "success": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 1.0,
+      "mean_steps": 23,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 1.0,
+      "task_id": "report_grounding_audit"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::return_home_compliance": {
+      "complete_rate": 0.5,
+      "failure_modes": {
+        "submit_rejected": 0.5,
+        "success": 0.5
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 1.0,
+      "mean_steps": 19,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.5,
+      "task_id": "return_home_compliance"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::safety_constrained_route": {
+      "complete_rate": 0.0,
+      "failure_modes": {
+        "ran_out_of_steps": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 0.006,
+      "mean_steps": 40,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 0.0,
+      "task_id": "safety_constrained_route"
+    },
+    "Qwen/Qwen3-4B-Instruct-2507::sparse_evidence_trap": {
+      "complete_rate": 1.0,
+      "failure_modes": {
+        "success": 1.0
+      },
+      "mean_parse_errors": 0,
+      "mean_reward": 1.0,
+      "mean_steps": 21,
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "n": 2,
+      "success_rate": 1.0,
+      "task_id": "sparse_evidence_trap"
+    }
+  },
+  "per_model": {
+    "Qwen/Qwen3-4B-Instruct-2507": {
+      "complete_rate": 0.3333333333333333,
+      "mean_parse_errors": 0,
+      "mean_reward": 0.58267,
+      "mean_steps": 25.133333333333333,
+      "n": 30,
+      "success_rate": 0.3333333333333333
+    }
+  }
+}

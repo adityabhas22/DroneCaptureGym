@@ -1,0 +1,71 @@
+{
+  "adapter_spec": "adityabhaskara/dronecaptureops-ppo-qwen3-4b-hf-local-Ashort2:output/step_10/adapter",
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "by_task": {
+    "edge_row_quality_bar": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "honest_partial_report_open_items": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0685,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "privacy_safe_alternate_evidence": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "return_margin_decision_point": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "route_replan_when_primary_viewpoint_blocked": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "scheduled_crane_window_wait_or_detour": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "strict_severity_weighted_triage": {
+      "mean_parse_errors": 0.0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20.0,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    }
+  },
+  "overall": {
+    "mean_process_reward": 0.0,
+    "mean_steps": 20.0,
+    "mean_terminal_reward": 0.0098,
+    "mean_total_reward": 0.0098,
+    "n_rollouts": 14,
+    "parse_error_rate": 0.0,
+    "success_rate": 0.0
+  }
+}

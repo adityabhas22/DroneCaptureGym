@@ -1,0 +1,25 @@
+2026-04-25 18:46:03,848 dronecaptureops.eval.models plan: 120 cells across 4 models, 15 tasks, 2 seeds
+2026-04-25 18:46:03,848 dronecaptureops.eval.models computing oracle reference trajectories for 15 tasks
+2026-04-25 18:46:05,231 dronecaptureops.eval.models [Qwen/Qwen3-4B-Instruct-2507] 30 cells
+2026-04-25 18:46:05,231 dronecaptureops.eval.models [Qwen/Qwen3-4B-Instruct-2507] cell 1/30 :: basic_thermal_survey :: seed=0
+2026-04-25 18:46:07,208 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:09,380 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:11,485 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:13,355 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:15,808 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:18,183 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:20,616 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:23,051 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:25,381 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:28,064 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:31,059 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:33,674 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:36,752 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:40,506 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:43,735 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:46,777 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:49,988 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:53,040 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:56,761 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:46:59,949 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 18:47:02,951 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"

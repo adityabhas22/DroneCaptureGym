@@ -1,0 +1,144 @@
+2026-04-26 00:20:17,482 dronecaptureops.eval.models plan: 7 cells across 1 models, 7 tasks, 1 seeds
+2026-04-26 00:20:17,482 dronecaptureops.eval.models computing oracle reference trajectories for 7 tasks
+2026-04-26 00:20:17,824 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] 7 cells
+2026-04-26 00:20:17,825 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 1/7 :: basic_thermal_survey :: seed=0
+2026-04-26 00:20:32,318 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:20:34,945 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:20:39,749 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:20:48,554 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:21:06,392 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:21:46,924 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 2/7 :: anomaly_confirmation :: seed=0
+2026-04-26 00:21:55,180 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:21:57,728 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:22:02,461 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:22:11,386 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:22:28,036 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:23:12,063 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:23:14,596 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:23:18,983 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:23:27,502 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:23:44,145 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:24:33,961 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:24:36,439 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:24:40,981 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:24:49,338 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:25:05,952 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:25:48,960 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 3/7 :: low_battery_inspection :: seed=0
+2026-04-26 00:25:51,598 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 4/7 :: safety_constrained_route :: seed=0
+2026-04-26 00:25:52,617 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:25:55,076 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:25:59,431 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:26:07,821 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:26:24,169 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:27:06,221 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:27:08,781 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:27:13,422 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:27:21,956 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:27:38,379 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:28:25,255 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:28:27,806 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:28:32,157 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:28:40,557 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:28:57,165 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:29:40,720 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 5/7 :: multi_anomaly_triage :: seed=0
+2026-04-26 00:29:42,639 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:29:45,000 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:29:49,404 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:29:57,818 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:30:14,236 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:30:57,275 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:30:59,876 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:31:04,406 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:31:12,963 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:31:29,513 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:32:16,527 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:32:19,055 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:32:23,576 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:32:32,124 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:32:48,769 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:33:27,822 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 6/7 :: sparse_evidence_trap :: seed=0
+2026-04-26 00:33:35,041 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:33:37,530 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:33:41,913 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:33:50,292 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:34:06,807 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:34:49,804 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:34:52,166 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:34:56,829 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:35:05,219 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:35:21,756 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:36:09,524 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:36:11,909 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:36:16,544 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:36:25,116 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:36:41,691 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:37:30,312 dronecaptureops.eval.models [Llama-3.3-70B-Instruct] cell 7/7 :: report_grounding_audit :: seed=0
+2026-04-26 00:37:30,707 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:37:33,069 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:37:37,426 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:37:45,780 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:38:02,287 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:38:44,506 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:38:47,520 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:38:51,917 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:39:00,470 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:39:16,879 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:40:04,669 dronecaptureops.agent.hf HF inference attempt 1/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 2.0s
+2026-04-26 00:40:07,071 dronecaptureops.agent.hf HF inference attempt 2/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 4.0s
+2026-04-26 00:40:11,605 dronecaptureops.agent.hf HF inference attempt 3/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 8.0s
+2026-04-26 00:40:19,956 dronecaptureops.agent.hf HF inference attempt 4/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 16.0s
+2026-04-26 00:40:36,421 dronecaptureops.agent.hf HF inference attempt 5/8 failed (_APIError('Too Many Requests — You have exceeded the maximum number of requests allowed within a given time frame. Wait a bit and try again.')); sleeping 32.0s
+2026-04-26 00:41:24,597 dronecaptureops.eval.models done; 7 cells in 1267.1s (181.0s/cell avg)
+
+=== per-model summary ===
+model                                               n  success  complete  mean_r  mean_steps  parse_err
+Llama-3.3-70B-Instruct                              7    0.00%     0.00%   0.083        25.1       1.86
+
+=== failure-mode distribution per model ===
+
+  Llama-3.3-70B-Instruct:
+    no_submit                 42.9%
+    coverage_incomplete       28.6%
+    no_capture                14.3%
+    ran_out_of_steps          14.3%
+
+=== capability checkpoint completion rate per model ===
+
+  Llama-3.3-70B-Instruct:
+    any_valid_action         100.0%  ████████████████████
+    explored_env              85.7%  █████████████████···
+    took_off                 100.0%  ████████████████████
+    captured_thermal          85.7%  █████████████████···
+    captured_rgb              71.4%  ██████████████······
+    inspected_capture          0.0%  ····················
+    covered_any_row           85.7%  █████████████████···
+    detected_any_anomaly      71.4%  ██████████████······
+    rgb_paired_anomaly        71.4%  ██████████████······
+    returned_home             85.7%  █████████████████···
+    landed                    85.7%  █████████████████···
+    submitted                 28.6%  █████···············
+    submission_accepted        0.0%  ····················
+
+=== mean tool calls per episode (top 10 per model) ===
+
+  Llama-3.3-70B-Instruct:
+    fly_to_viewpoint                   7.29
+    capture_thermal                    6.14
+    set_camera_source                  2.43
+    takeoff                            2.00
+    _parse_error                       1.86
+    land                               1.43
+    return_home                        1.29
+    capture_rgb                        1.00
+    get_mission_checklist              0.86
+    submit_evidence_pack               0.43
+
+=== per-(model, task) ===
+model                                    task_id                         n  success  complete  mean_r  mean_steps
+Llama-3.3-70B-Instruct                   anomaly_confirmation            1    0.00%     0.00%   0.000        33.0
+Llama-3.3-70B-Instruct                   basic_thermal_survey            1    0.00%     0.00%   0.714        15.0
+Llama-3.3-70B-Instruct                   low_battery_inspection          1    0.00%     0.00%   0.000         3.0
+Llama-3.3-70B-Instruct                   multi_anomaly_triage            1    0.00%     0.00%   0.011        25.0
+Llama-3.3-70B-Instruct                   report_grounding_audit          1    0.00%     0.00%  -0.145        31.0
+Llama-3.3-70B-Instruct                   safety_constrained_route        1    0.00%     0.00%   0.000        29.0
+Llama-3.3-70B-Instruct                   sparse_evidence_trap            1    0.00%     0.00%   0.000        40.0

@@ -1,0 +1,680 @@
+2026-04-25 23:28:10,450 dronecaptureops.eval.models plan: 30 cells across 1 models, 15 tasks, 2 seeds
+2026-04-25 23:28:10,450 dronecaptureops.eval.models computing oracle reference trajectories for 15 tasks
+2026-04-25 23:28:11,806 dronecaptureops.eval.models [Qwen/Qwen3-32B] 30 cells
+2026-04-25 23:28:11,806 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 1/30 :: basic_thermal_survey :: seed=0
+2026-04-25 23:28:13,055 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:13,765 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:14,571 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:15,454 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:16,268 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:17,164 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:18,080 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:18,925 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:19,736 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:20,697 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:21,571 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:22,574 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:23,842 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:24,961 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:26,241 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:27,631 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:28,626 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:29,677 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:30,658 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:32,100 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:33,330 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:34,688 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:35,763 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:36,982 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:38,121 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:39,292 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:40,714 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:41,978 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:43,050 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:44,288 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:45,219 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:46,399 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:47,476 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:48,641 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:49,889 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:51,015 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:52,155 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:53,351 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:54,562 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:55,828 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:55,850 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 2/30 :: basic_thermal_survey :: seed=1
+2026-04-25 23:28:56,746 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:57,437 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:58,139 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:28:59,501 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:00,280 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:01,067 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:02,117 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:03,011 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:04,389 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:05,262 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:06,382 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:07,483 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:08,513 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:09,457 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:10,767 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:11,966 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:12,981 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:13,982 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:15,112 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:16,081 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:17,195 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:18,143 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:19,195 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:20,206 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:21,193 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:22,124 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:23,097 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:24,169 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:25,393 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:26,360 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:27,590 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:28,624 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:29,745 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:30,953 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:32,077 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:33,574 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:34,872 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:35,900 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:37,243 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:38,434 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:38,460 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 3/30 :: anomaly_confirmation :: seed=0
+2026-04-25 23:29:39,348 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:40,094 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:40,765 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:41,700 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:42,488 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:43,248 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:44,061 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:45,106 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:45,942 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:46,843 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:47,807 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:48,803 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:49,870 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:50,972 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:51,926 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:52,876 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:54,214 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:55,264 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:56,222 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:57,312 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:58,395 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:29:59,372 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:00,317 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:01,573 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:02,587 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:03,595 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:04,566 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:05,595 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:06,764 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:08,005 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:09,373 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:10,798 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:12,073 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:13,169 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:14,178 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:15,517 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:16,665 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:17,614 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:18,662 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:19,855 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:19,865 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 4/30 :: anomaly_confirmation :: seed=1
+2026-04-25 23:30:20,627 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:21,330 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:22,094 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:22,978 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:23,922 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:24,994 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:26,003 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:26,847 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:28,099 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:29,032 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:30,091 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:31,297 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:31,977 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:31,978 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:34,126 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:35,440 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:36,695 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:37,841 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:38,296 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:38,297 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:39,803 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:39,803 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:41,414 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:41,415 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:30:44,765 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:45,402 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:45,402 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:46,975 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:46,976 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:49,787 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:50,971 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:51,467 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:51,468 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:53,620 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:54,721 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:55,895 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:30:56,486 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:30:56,486 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:30:58,847 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:00,087 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:01,502 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:01,995 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:01,995 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:04,122 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:05,160 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:06,419 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:07,424 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:08,774 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:10,045 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:10,567 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:10,568 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:12,667 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:13,747 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:14,772 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:15,825 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:16,336 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:16,337 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:17,911 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:17,911 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:19,493 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:19,494 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:31:22,805 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:23,417 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:23,418 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:31:25,912 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:25,913 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:31:29,254 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:30,357 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:30,897 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:30,897 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:32,908 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:33,927 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:33,947 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 5/30 :: low_battery_inspection :: seed=0
+2026-04-25 23:31:34,729 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:35,551 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:36,261 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:37,306 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:38,357 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:39,258 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:40,265 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:40,702 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:40,703 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:42,749 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:43,598 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:44,497 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:45,423 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:46,386 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:47,311 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:48,506 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:49,427 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:50,531 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:51,004 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:51,005 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:53,152 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:54,260 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:55,433 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:55,912 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:31:55,912 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:31:58,130 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:31:59,094 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:00,084 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:01,546 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:01,997 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:01,998 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:04,062 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:04,992 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:06,143 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:07,262 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:07,760 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:07,760 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:10,697 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:10,711 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 6/30 :: low_battery_inspection :: seed=1
+2026-04-25 23:32:11,528 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:12,467 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:13,313 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:14,058 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:14,913 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:15,713 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:16,628 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:17,701 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:18,726 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:19,665 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:20,536 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:20,969 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:20,970 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:22,918 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:24,039 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:25,198 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:25,655 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:25,655 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:27,760 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:28,237 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:28,237 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:30,488 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:30,953 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:30,953 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:32,882 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:33,405 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:33,405 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:35,571 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:36,190 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:36,190 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:37,688 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:37,689 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:39,997 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:40,451 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:40,451 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:32:42,895 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:42,895 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:44,415 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:44,415 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:32:47,647 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:48,728 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:49,879 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:50,361 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:50,361 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:52,454 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:52,910 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:52,911 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:54,909 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:55,958 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:32:56,479 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:56,479 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:32:58,088 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:32:58,089 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:00,256 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:00,846 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:00,847 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:33:04,103 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:04,670 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:04,671 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:06,723 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:06,756 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 7/30 :: bad_weather_recapture :: seed=0
+2026-04-25 23:33:07,584 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:08,387 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:08,757 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:08,757 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:10,539 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:11,680 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:12,728 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:13,253 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:13,253 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:15,347 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:16,398 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:17,340 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:18,198 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:19,377 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:20,301 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:21,351 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:22,323 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:23,541 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:24,496 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:24,946 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:24,946 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:26,399 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:26,399 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:28,343 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:29,362 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:30,313 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:30,683 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:30,683 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:32,819 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:33,269 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:33,270 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:35,288 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:36,321 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:37,370 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:37,894 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:37,894 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:39,995 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:41,226 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:41,680 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:41,680 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:43,945 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:44,527 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:44,527 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:45,984 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:45,985 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:33:48,119 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:49,148 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:50,183 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:50,626 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:50,627 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:33:53,658 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:54,699 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:55,843 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:57,296 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:33:57,816 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:33:57,816 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:00,091 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:00,581 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:00,581 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:03,746 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:05,022 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:06,346 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:06,818 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:06,818 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:09,975 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:10,448 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:10,448 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:13,104 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:13,104 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:15,119 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:16,463 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:17,567 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:17,582 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 8/30 :: bad_weather_recapture :: seed=1
+2026-04-25 23:34:18,547 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:19,322 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:20,047 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:20,442 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:20,442 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:22,246 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:23,066 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:23,895 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:24,795 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:25,802 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:26,873 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:27,291 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:27,292 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:29,276 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:30,324 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:31,372 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:32,421 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:32,944 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:32,944 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:35,209 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:36,179 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:36,800 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:36,800 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:38,300 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:38,301 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:40,863 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:40,863 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:34:44,061 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:44,521 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:44,521 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:47,099 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:47,099 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:50,246 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:50,845 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:50,845 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:54,085 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:34:54,565 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:54,566 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:34:56,176 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:56,176 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:34:58,634 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:34:58,635 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:35:01,984 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:03,354 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:04,401 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:04,926 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:04,927 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:07,123 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:07,628 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:07,628 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:09,210 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:09,210 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:35:12,463 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:13,212 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:13,213 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:15,414 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:15,935 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:15,935 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:17,511 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:17,512 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:35:20,657 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:21,941 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:22,939 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:23,936 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:24,975 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:25,477 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:25,478 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:27,473 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:28,567 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:29,062 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:29,063 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:31,289 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:31,782 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:31,782 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:33,886 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:35,011 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:35,495 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:35,495 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:35:38,590 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:39,125 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:39,126 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:35:42,499 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:43,520 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:44,580 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:45,177 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:45,178 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:47,307 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:48,691 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:48,705 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 9/30 :: safety_constrained_route :: seed=0
+2026-04-25 23:35:49,493 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:50,377 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:51,246 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:52,115 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:52,960 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:54,212 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:54,997 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:55,998 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:56,868 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:35:57,358 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:57,359 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:35:58,927 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:35:58,927 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:00,397 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:00,399 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:36:02,848 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:02,849 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:04,304 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:04,306 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:36:06,794 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:06,794 dronecaptureops.agent.hf HF inference attempt 2/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 4.0s
+2026-04-25 23:36:11,891 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:12,796 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:13,842 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:15,091 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:16,324 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:16,816 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:16,816 openai._base_client Retrying request to /chat/completions in 3.000000 seconds
+2026-04-25 23:36:21,113 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:21,642 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:21,642 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:23,897 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:24,370 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:24,370 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:26,408 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:27,765 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:28,290 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:28,291 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:30,418 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:30,915 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:30,916 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:33,013 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:33,536 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:33,536 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:35,695 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:36,683 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:37,306 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:37,307 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:38,867 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:38,867 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:36:42,096 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:43,063 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:44,070 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:44,548 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:44,549 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:46,648 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:47,216 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:47,217 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:36:49,140 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:49,674 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:36:49,675 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:36:53,330 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:53,357 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 10/30 :: safety_constrained_route :: seed=1
+2026-04-25 23:36:54,281 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:55,258 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:56,124 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:56,890 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:57,703 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:58,788 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:36:59,754 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:00,803 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:01,712 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:02,901 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:03,950 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:05,089 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:05,690 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:05,691 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:37:09,031 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:10,018 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:11,852 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:12,755 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:13,993 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:14,439 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:14,439 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:16,534 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:17,626 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:18,145 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:18,146 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:20,261 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:20,727 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:20,727 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:37:27,100 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:28,212 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:29,286 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:29,743 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:29,743 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:31,214 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:31,214 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:37:33,835 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:33,836 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:37:37,077 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:38,347 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:39,076 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:39,076 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:41,270 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:42,326 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:42,813 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:42,814 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:44,937 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:45,961 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:46,982 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:47,577 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:47,577 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:49,848 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:51,027 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:51,678 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:51,678 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:37:55,235 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:55,740 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:55,741 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:37:58,163 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:37:59,110 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:37:59,110 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:38:01,635 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:01,636 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:03,726 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:04,242 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:04,243 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:05,818 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:05,819 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:07,921 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:09,052 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:09,497 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:09,497 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:38:12,113 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:12,113 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:13,679 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:13,680 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:38:16,891 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:18,072 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:18,695 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:18,696 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:21,068 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:21,104 dronecaptureops.eval.models [Qwen/Qwen3-32B] cell 11/30 :: sparse_evidence_trap :: seed=0
+2026-04-25 23:38:21,866 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:22,709 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:23,403 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:24,176 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:25,125 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:26,062 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:26,841 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:27,314 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:27,315 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:29,277 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:29,740 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:29,741 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:31,143 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:31,143 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:33,102 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:34,036 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:35,345 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:36,350 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:37,628 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:38,659 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:39,623 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:40,227 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:40,228 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:42,421 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:43,590 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:44,163 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:44,164 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:38:47,236 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:47,904 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:47,904 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:38:50,916 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:52,046 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:53,225 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:38:53,686 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:53,686 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:55,126 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:55,127 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:38:56,675 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:38:56,677 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:38:59,849 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:00,872 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:02,108 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:02,595 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:02,595 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:39:05,063 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:05,064 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:07,473 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:08,008 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:08,008 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:09,491 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:09,491 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:10,945 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:10,947 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:39:13,452 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:13,452 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:39:16,722 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:17,202 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:17,202 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:18,692 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:18,692 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:20,307 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:20,308 dronecaptureops.agent.hf HF inference attempt 1/6 failed (RateLimitError("Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen/qwen3-32b` in organization `org_01jrsx647rf4jbw1ndc19t1p1d` service tier `on_demand` on tokens per minute...); sleeping 2.0s
+2026-04-25 23:39:23,481 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:23,969 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:23,970 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:39:27,279 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:27,737 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:27,737 openai._base_client Retrying request to /chat/completions in 1.000000 seconds
+2026-04-25 23:39:29,234 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:29,234 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
+2026-04-25 23:39:32,515 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:33,633 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 200 OK"
+2026-04-25 23:39:34,193 httpx HTTP Request: POST https://router.huggingface.co/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-04-25 23:39:34,193 openai._base_client Retrying request to /chat/completions in 2.000000 seconds
