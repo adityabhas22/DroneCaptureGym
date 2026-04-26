@@ -13,6 +13,20 @@ can plan, capture grounded evidence, stay safe, and report honestly.
 
 ---
 
+## Watch The Demo First
+
+The fastest way to understand the submission is the demo video:
+
+**[Watch the DroneCaptureOps Gym submission demo](https://www.youtube.com/watch?v=ooE8gAG3Oa0)**
+
+The video shows the project as an actual OpenEnv-style aerial inspection
+environment: a mission with visible state, structured drone-operation tools,
+evidence capture, reward feedback, and the live inspection console. The rest
+of this writeup explains the environment design, training stack, and
+diagnostic results behind that demo.
+
+---
+
 ## Why This Problem Matters
 
 Solar farms, bridges, construction sites, industrial plants, disaster zones,
@@ -256,27 +270,53 @@ W&B tracking is wired into both SFT and PPO trainers.
 
 ## Training Results
 
-Real artifacts that exist in this repo today:
-
-- Smoke evaluation output: `artifacts/smoke-eval/summary.json`.
-- Traceable demonstration episode:
-  `artifacts/trace-demo/{trace.md,trace.json,evidence_log.json,route_log.json,
-  inspection_report.json,reward_evolution.json,safety_timeline.json}`.
-- PPO sweep configs and decision logs:
-  `artifacts/ppo-runs-2026-04-26/`.
 - TODO: add final training data / model metrics summary after the final run
   outputs are available.
 
-Current SFT training snapshot:
+The training runs are best read as diagnostics for the environment and reward
+design. They show that the benchmark gives dense learning signal, exposes
+policy drift, and separates partial reward-seeking from true held-out task
+completion.
 
-![Qwen3-4B LoRA SFT training metrics](assets/sft-training-metrics.png)
+### SFT Warm-Start Snapshot
 
-The SFT and PPO artifacts should be read as training infrastructure and
+The SFT adapter learns the DroneCaptureOps tool-call format cleanly: loss falls
+steadily, train/eval token accuracy improves, and the eval-train gap remains
+small by the best checkpoint.
+
+![Qwen3-4B LoRA SFT training metrics](docs/assets/sft-training-metrics.png)
+
+### PPO/RL Learning Signal
+
+The short PPO/RL run shows a clear early reward peak around update 10 and a
+brief non-zero task-completion signal. The zoomed view is useful because it
+shows the first moment where the policy begins converting the SFT warm start
+into environment reward.
+
+![PPO/RL step 1-10 zoom](docs/assets/ppo-rl-step10-zoom.png)
+
+Across the full 25-step run, the diagnostic curves also show why this is a hard
+benchmark: reward peaks early, then policy drift/entropy rise and the final
+policy loses the temporary gain. That makes the environment valuable for
+training research because it catches reward spikes that do not become stable
+mission policies.
+
+![PPO/RL full 25-step run](docs/assets/ppo-rl-full25-run.png)
+
+### Held-Out Generalization Check
+
+The held-out comparison is intentionally strict: partial reward exists, but
+task completion is not yet solved by base, SFT, or the short PPO checkpoints.
+This is an honest stress test rather than a polished leaderboard claim, and it
+is exactly the kind of signal needed before scaling longer RL runs.
+
+![Held-out evaluation comparison](docs/assets/heldout-eval-comparison.png)
+
+The SFT and PPO diagnostics should be read as training infrastructure and
 reproducibility evidence, not as a claim that a final RL policy already beats
-the scripted benchmark. We are deliberately not fabricating final model
-accuracy. The strongest completed evidence in this submission is the
-environment, verifier, reward design, deterministic task suite, and traceable
-baseline/evaluation stack.
+the scripted benchmark. The strongest completed evidence in this submission is
+the environment, verifier, reward design, deterministic task suite, and
+traceable baseline/evaluation stack.
 
 ---
 
@@ -314,21 +354,21 @@ openenv push --repo-id <hf-username>/dronecaptureops-gym
 Notebook for judges:
 
 - `training/colab_training_template.ipynb` shows the intended SFT/RL
-  training workflow and links back to the committed configs/artifacts.
+  training workflow and links back to the committed configs and diagnostics.
 
 ---
 
 ## Demo / Video / Extra Materials
 
-TODO: add final demo video link after the metrics and presentation assets are
-ready.
+Primary demo video:
 
-The best in-repo demo material is the deterministic trace bundle:
+**[DroneCaptureOps Gym submission demo](https://www.youtube.com/watch?v=ooE8gAG3Oa0)**
 
-- `artifacts/trace-demo/trace.md` — readable step-by-step episode.
-- `artifacts/trace-demo/reward_evolution.json` — reward evolution.
-- `artifacts/trace-demo/evidence_log.json` — captured evidence.
-- `artifacts/trace-demo/inspection_report.json` — submitted report.
+This is the main judge-facing walkthrough. It is the easiest way to see the
+environment running end-to-end: OpenEnv server, mission state, high-level drone
+tools, capture/evidence flow, reward diagnostics, and the live UI used to
+inspect rollouts.
+
 - `/ui/` in the running server — browser console for live rollouts,
   model runs, dataset replay, action logs, captures, and reward breakdowns.
 
