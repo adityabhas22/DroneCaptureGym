@@ -47,7 +47,7 @@ DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
     "ppo": "h200",      # 4B PPO: 1× H200 (141 GB) — HFLocalEngine colocate
-    "eval": "h200",     # 4B eval: 14 rollouts × ~30s = ~7 min on H200
+    "eval": "l40sx1",   # 4B BF16 inference fits in 48GB; no Hopper fabric bug
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
     "sft": "2h",
