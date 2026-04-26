@@ -66,6 +66,8 @@ class HFGeneratePolicy:
     enable_thinking: bool = False
     name: str = "hf_generate"
     _messages: list[dict[str, Any]] = field(default_factory=list, init=False)
+    _last_training_messages: list[dict[str, Any]] = field(default_factory=list, init=False)
+    _pending_prompt_messages: list[dict[str, Any]] | None = field(default=None, init=False)
     _initialised: bool = field(default=False, init=False)
 
     @property
@@ -78,26 +80,87 @@ class HFGeneratePolicy:
         """
         return list(self._messages)
 
+    @property
+    def training_messages(self) -> list[dict[str, Any]]:
+        """Bounded prompt+completion window for policy-gradient training.
+
+        Rollout generation uses ``_trimmed()`` to keep context bounded. The
+        trainer must score the same bounded conversation, not the full episode
+        history, otherwise long rollouts can lose every assistant span during
+        tokenization and skip the GRPO update.
+        """
+
+        if self._last_training_messages:
+            return list(self._last_training_messages)
+        return self.messages
+
     def __post_init__(self) -> None:
         self._tool_schemas = openai_tool_schemas(self.env._tools)  # noqa: SLF001
 
     # ---------- Policy protocol ----------
 
     def next_action(self, observation: DroneObservation, context: AgentContext) -> RawDroneAction:
+        """Single-call entrypoint: build prompt, run generate, parse action.
+
+        Used by callers that don't batch across rollouts (the original
+        Policy protocol). The group-batched rollout pool drives the same
+        state transitions via the explicit ``prepare_prompt`` /
+        ``ingest_completion`` pair below so it can fuse G ``generate()``
+        calls into one.
+        """
+
+        prompt = self.prepare_prompt(observation, context)
+        completion = self._generate(prompt)
+        return self.ingest_completion(completion)
+
+    # ---------- Group-batched protocol ----------
+
+    def prepare_prompt(self, observation: DroneObservation, context: AgentContext) -> str:
+        """Append the user turn for this observation and render its prompt.
+
+        Mutates ``_messages`` (adds the user turn) and snapshots the
+        bounded prompt window in ``_pending_prompt_messages`` so that the
+        matching ``ingest_completion`` call records the same window into
+        ``_last_training_messages``. Calling ``prepare_prompt`` twice in
+        a row without an ``ingest_completion`` is a programming error and
+        will raise.
+        """
+
         self._ensure_initialised()
+        if self._pending_prompt_messages is not None:
+            raise RuntimeError(
+                "HFGeneratePolicy.prepare_prompt called twice without "
+                "ingest_completion in between — caller is mis-driving "
+                "the batched protocol."
+            )
         is_initial = len(self._messages) == 1
         self._messages.append(build_user_message(observation, is_initial=is_initial))
+        prompt_messages = self._trimmed()
+        self._pending_prompt_messages = list(prompt_messages)
+        return self._render_prompt(prompt_messages)
 
-        prompt = self._render_prompt(self._trimmed())
-        completion = self._generate(prompt)
-        # Persist the raw assistant text so subsequent turns see what the
-        # model actually emitted (including any prose preamble).
-        self._messages.append({"role": "assistant", "content": completion})
+    def ingest_completion(self, completion: str) -> RawDroneAction:
+        """Record the assistant turn for the matching ``prepare_prompt`` call.
 
-        try:
-            return parse_action(completion)
-        except ActionValidationError:
-            raise
+        Updates the full history (``_messages``) and the bounded
+        training window (``_last_training_messages``) so the trainer
+        can score exactly the prompt+completion pair the model saw.
+        Parses and returns the next action; ``ActionValidationError``
+        bubbles up so the runner can record the parse failure.
+        """
+
+        if self._pending_prompt_messages is None:
+            raise RuntimeError(
+                "HFGeneratePolicy.ingest_completion called without a "
+                "matching prepare_prompt — caller is mis-driving the "
+                "batched protocol."
+            )
+        prompt_messages = self._pending_prompt_messages
+        self._pending_prompt_messages = None
+        assistant_msg = {"role": "assistant", "content": completion}
+        self._messages.append(assistant_msg)
+        self._last_training_messages = [*prompt_messages, assistant_msg]
+        return parse_action(completion)
 
     # ---------- Generation ----------
 
@@ -142,6 +205,11 @@ class HFGeneratePolicy:
                 text = text.split(stop, 1)[0]
         return text
 
+    def render_prompt(self, messages: list[dict[str, Any]]) -> str:
+        """Public helper — used by the group rollout pool to re-render."""
+
+        return self._render_prompt(messages)
+
     def _render_prompt(self, messages: list[dict[str, Any]]) -> str:
         kwargs: dict[str, Any] = {"tokenize": False, "add_generation_prompt": True}
         if self.enable_thinking is False:
@@ -169,6 +237,7 @@ class HFGeneratePolicy:
             "role": "system",
             "content": (
                 system_msg["content"]
+                + ("\n\n/no_think" if self.enable_thinking is False else "")
                 + "\n\n# Tool JSON Schemas (for reference)\n```json\n"
                 + schema_blob
                 + "\n```\n"
@@ -178,13 +247,18 @@ class HFGeneratePolicy:
         self._initialised = True
 
     def _trimmed(self) -> list[dict[str, Any]]:
-        """Keep system prompt + first user turn + last K user/assistant pairs."""
+        """Keep system prompt + the most recent bounded interaction window.
+
+        ``max_history_steps=1`` must mean "current observation only" during
+        GRPO scoring. Keeping the first observation as well can push the
+        assistant span past ``max_total_length`` and produce zero trainable
+        trajectories.
+        """
 
         if len(self._messages) <= 1 + 2 * self.max_history_steps:
             return list(self._messages)
-        head = self._messages[:2]
-        tail = self._messages[-(2 * self.max_history_steps - 1):]
-        return head + tail
+        history_slots = max(1, 2 * self.max_history_steps - 1)
+        return [self._messages[0], *self._messages[-history_slots:]]
 
 
 __all__ = ["HFGeneratePolicy"]

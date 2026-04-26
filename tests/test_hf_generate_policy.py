@@ -107,6 +107,104 @@ def test_render_prompt_is_apply_chat_template_compatible():
     assert rendered.endswith("<assistant>")
 
 
+def test_prepare_prompt_then_ingest_completion_round_trip():
+    """Group-batched protocol contract.
+
+    ``prepare_prompt`` should append the user turn and snapshot the
+    bounded prompt window, leaving ``_pending_prompt_messages`` set.
+    ``ingest_completion`` should consume the pending window, append the
+    assistant turn, and update ``training_messages`` to exactly the
+    prompt+completion pair that the model would have scored if we had
+    called ``next_action`` instead.
+    """
+
+    from dronecaptureops.agent.policies import AgentContext
+
+    env = DroneCaptureOpsEnvironment()
+    obs = env.reset(seed=0, task="basic_thermal_survey")
+    policy = HFGeneratePolicy(
+        model=_FakeModel(),
+        tokenizer=_FakeTokenizer(),
+        env=env,
+        task_id="basic_thermal_survey",
+    )
+    context = AgentContext()
+
+    prompt = policy.prepare_prompt(obs, context)
+    assert isinstance(prompt, str) and prompt.endswith("<assistant>")
+    assert policy._pending_prompt_messages is not None  # noqa: SLF001
+    pending_len = len(policy._pending_prompt_messages)  # noqa: SLF001
+
+    completion = (
+        '{"tool_name": "get_mission_checklist", "arguments": {}}'
+    )
+    action = policy.ingest_completion(completion)
+    assert action.tool_name == "get_mission_checklist"
+    assert policy._pending_prompt_messages is None  # noqa: SLF001
+    # training_messages should be the bounded prompt window plus exactly
+    # one assistant turn carrying the raw completion text.
+    assert len(policy.training_messages) == pending_len + 1
+    assert policy.training_messages[-1] == {
+        "role": "assistant",
+        "content": completion,
+    }
+
+
+def test_double_prepare_without_ingest_raises():
+    from dronecaptureops.agent.policies import AgentContext
+
+    env = DroneCaptureOpsEnvironment()
+    obs = env.reset(seed=0, task="basic_thermal_survey")
+    policy = HFGeneratePolicy(
+        model=_FakeModel(),
+        tokenizer=_FakeTokenizer(),
+        env=env,
+        task_id="basic_thermal_survey",
+    )
+    context = AgentContext()
+    policy.prepare_prompt(obs, context)
+    with pytest.raises(RuntimeError, match="prepare_prompt"):
+        policy.prepare_prompt(obs, context)
+
+
+def test_ingest_without_prepare_raises():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=0, task="basic_thermal_survey")
+    policy = HFGeneratePolicy(
+        model=_FakeModel(),
+        tokenizer=_FakeTokenizer(),
+        env=env,
+        task_id="basic_thermal_survey",
+    )
+    with pytest.raises(RuntimeError, match="prepare_prompt"):
+        policy.ingest_completion("{}")
+
+
+def test_trimmed_one_history_step_keeps_current_observation_only():
+    env = DroneCaptureOpsEnvironment()
+    env.reset(seed=0, task="basic_thermal_survey")
+    policy = HFGeneratePolicy(
+        model=_FakeModel(),
+        tokenizer=_FakeTokenizer(),
+        env=env,
+        task_id="basic_thermal_survey",
+        max_history_steps=1,
+    )
+    policy._messages = [  # noqa: SLF001
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "initial observation"},
+        {"role": "assistant", "content": "{}"},
+        {"role": "user", "content": "current observation"},
+    ]
+
+    trimmed = policy._trimmed()  # noqa: SLF001
+
+    assert trimmed == [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "current observation"},
+    ]
+
+
 @pytest.mark.skipif(
     not os.environ.get("RUN_GPU_TESTS"),
     reason="Real-model smoke requires a GPU and is opt-in via RUN_GPU_TESTS=1.",

@@ -207,12 +207,23 @@ def test_repo_tarball_bytes_excludes_secrets_and_caches(tmp_path: Path):
 
 
 def test_push_repo_tarball_uploads_blob_and_creates_repo():
+    """When the dataset repo doesn't yet exist, the helper must create it.
+
+    ``ensure_dataset_repo`` HEAD-probes via ``api.repo_info`` first to avoid
+    a 403 on no-create tokens; we simulate "missing" by raising
+    ``RepositoryNotFoundError`` so the create path is exercised here.
+    """
+
+    from huggingface_hub.errors import RepositoryNotFoundError
+
     api = MagicMock()
+    api.repo_info.side_effect = RepositoryNotFoundError("not found")
     repo_root = REPO_ROOT  # use the actual repo so we know the tarball is non-empty
 
     result = push_repo_tarball(api, repo_root=repo_root, dataset_repo_id="user/bundle")
 
     assert result == "user/bundle"
+    api.repo_info.assert_called_once()
     api.create_repo.assert_called_once()
     create_kwargs = api.create_repo.call_args.kwargs
     assert create_kwargs["repo_id"] == "user/bundle"
@@ -238,7 +249,10 @@ def test_push_jsonl_dataset_requires_existing_file(tmp_path: Path):
 
 
 def test_push_jsonl_dataset_uploads_when_present(tmp_path: Path):
+    from huggingface_hub.errors import RepositoryNotFoundError
+
     api = MagicMock()
+    api.repo_info.side_effect = RepositoryNotFoundError("not found")
     path = tmp_path / "sft.jsonl"
     path.write_text(json.dumps({"task_id": "x", "messages": []}) + "\n")
     push_jsonl_dataset(api, jsonl_path=path, dataset_repo_id="user/data")
@@ -247,14 +261,36 @@ def test_push_jsonl_dataset_uploads_when_present(tmp_path: Path):
     assert api.upload_file.call_args.kwargs["path_in_repo"] == "sft.jsonl"
 
 
-def test_push_training_outputs_skips_missing_dirs(tmp_path: Path):
+def test_push_jsonl_dataset_skips_create_when_repo_exists(tmp_path: Path):
+    """If the dataset repo already exists the helper must NOT call create_repo.
+
+    HF Hub's tightened token scopes will 403 even when ``exist_ok=True``
+    if the token can't create datasets in the namespace; the HEAD probe
+    in ``ensure_dataset_repo`` is what makes pushes work for tokens that
+    can only upload into pre-existing repos.
+    """
+
     api = MagicMock()
+    api.repo_info.return_value = SimpleNamespace(id="user/data")
+    path = tmp_path / "sft.jsonl"
+    path.write_text(json.dumps({"task_id": "x", "messages": []}) + "\n")
+    push_jsonl_dataset(api, jsonl_path=path, dataset_repo_id="user/data")
+    api.repo_info.assert_called_once()
+    api.create_repo.assert_not_called()
+    api.upload_file.assert_called_once()
+
+
+def test_push_training_outputs_skips_missing_dirs(tmp_path: Path):
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    api = MagicMock()
+    api.repo_info.side_effect = RepositoryNotFoundError("not found")
     real = tmp_path / "final"
     real.mkdir()
     (real / "adapter.bin").write_text("weights")
     fake = tmp_path / "logs"  # does not exist
     push_training_outputs(api, output_repo_id="user/out", artifact_dirs=[real, fake])
-    # create_repo always called; upload_folder only for the existing dir.
+    # First call is the model-repo probe; second is the actual create on miss.
     api.create_repo.assert_called_once()
     assert api.upload_folder.call_count == 1
     assert api.upload_folder.call_args.kwargs["folder_path"] == str(real)

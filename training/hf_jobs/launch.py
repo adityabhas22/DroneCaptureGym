@@ -190,7 +190,15 @@ def follow_logs(*, job_id: str, token: str, namespace: str | None = None) -> Non
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Launch DroneCaptureOps SFT or PPO on HF Jobs.")
-    parser.add_argument("job_type", choices=["sft", "ppo", "grpo"], help="Which trainer to run.")
+    parser.add_argument(
+        "job_type",
+        choices=["sft", "ppo", "grpo", "eval"],
+        help=(
+            "Which job to run. 'eval' runs the multi-variant held-out evaluation via "
+            "training/eval_grpo.py inside the job (variants forwarded through "
+            "DRONECAPTUREOPS_EVAL_VARIANTS — see README or pass --env at the launcher)."
+        ),
+    )
     parser.add_argument("--base-model", required=True, help="HF model ID to train (or pre-SFT'd checkpoint for PPO).")
     parser.add_argument("--output-repo", required=True, help="HF model repo to receive the trained adapter.")
     parser.add_argument("--sft-data", type=Path, default=Path("artifacts/sft/sft-warmstart.jsonl"),
@@ -246,6 +254,10 @@ def _resolve_default_config(job_type: JobType) -> str:
         return "training/configs/sft_train_default.yaml"
     if job_type == "grpo":
         return "training/configs/grpo_tiny_4b_l40.yaml"
+    if job_type == "eval":
+        # Eval reads its own knobs from env vars (DRONECAPTUREOPS_EVAL_*),
+        # so the YAML path is informational only and never read inside the job.
+        return ""
     return "training/configs/ppo_train_default.yaml"
 
 
@@ -255,7 +267,10 @@ def main() -> int:
 
     token = _resolve_token(required=not args.dry_run)
     LOG.info("env: hf_token_visible=%s names=%s", bool(visible_token_names()), visible_token_names())
-    whoami = verify_hf_access(token) if not args.dry_run else None
+    # When --namespace is supplied, avoid an extra whoami() call. HF rate-limits
+    # whoami aggressively during repeated hackathon launches, while run_job()
+    # still validates the token and billing permissions server-side.
+    whoami = verify_hf_access(token) if not args.dry_run and not args.namespace else None
     namespace = args.namespace or (whoami.get("name") if whoami else "<your-namespace>")
 
     repo_dataset_id = args.repo_dataset_id or derive_repo_dataset_id(

@@ -80,6 +80,7 @@ def test_gpu_runtime_env_defaults(monkeypatch):
         ("training/configs/grpo_tiny_4b_l40.yaml", 0.01, 10),
         ("training/configs/grpo_tiny_4b_l40_kl005.yaml", 0.005, 10),
         ("training/configs/grpo_tiny_4b_l40_kl02.yaml", 0.02, 10),
+        ("training/configs/grpo_fast_4b_h200.yaml", 0.005, 20),
     ],
 )
 def test_grpo_configs_resolve(config_path, kl_coef, expected_steps):
@@ -101,6 +102,28 @@ def test_grpo_smoke_config_is_minimal():
     assert cfg["rollout"]["prompts_per_step"] == 1
     assert cfg["rollout"]["group_size"] == 2
     assert cfg["total_steps"] == 1
+
+
+def test_grpo_fast_h200_config_fits_one_hour_budget():
+    """The fast H200 config is sized so 20 steps fit in a 1-hour HF Job.
+
+    These bounds protect against accidental edits that would blow the
+    budget — e.g. someone bumping group_size to 16 would push per-step
+    time back over the 2-minute target.
+    """
+
+    result = _run_cli(["--config", "training/configs/grpo_fast_4b_h200.yaml", "--dry-run"])
+    assert result.returncode == 0, result.stderr
+    cfg = json.loads(result.stdout)["config"]
+    assert cfg["total_steps"] == 20
+    assert cfg["rollout"]["prompts_per_step"] == 4
+    assert cfg["rollout"]["group_size"] == 8
+    assert cfg["rollout"]["max_episode_steps"] == 4
+    assert cfg["rollout"]["max_new_tokens_per_turn"] == 128
+    assert cfg["rollout"]["max_history_steps"] == 1
+    assert cfg["max_total_length"] == 8192
+    assert cfg["allow_fresh_lora"] is False
+    assert cfg["sft_checkpoint"], "fast config must continue from SFT warmstart"
 
 
 def test_unknown_task_id_is_rejected(tmp_path: Path):

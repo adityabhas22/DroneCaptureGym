@@ -5,7 +5,8 @@
 #   - ~17 GB freed by removing vLLM
 #   - one fewer forward+backward (no critic loss)
 #   - no critic warmup (was the L40S OOM site)
-# That gives us room for group_size=4 at max_total_length=4096.
+# The trainer scores the same bounded generation window used during rollout,
+# with short no-think completions so assistant spans fit reliably.
 
 model_name: Qwen/Qwen3-4B-Instruct-2507
 tokenizer_name: null
@@ -14,7 +15,7 @@ allow_fresh_lora: false
 output_dir: artifacts/grpo-tiny-4b/checkpoints
 
 max_prompt_length: 2048
-max_total_length: 4096
+max_total_length: 8192
 pad_to_multiple_of: 8
 
 grpo_epochs: 1
@@ -53,16 +54,16 @@ rollout:
   group_size: 4
   temperature: 0.9
   top_p: 1.0
-  max_new_tokens_per_turn: 384
-  max_episode_steps: 8
-  max_history_steps: 4
+  max_new_tokens_per_turn: 160
+  max_episode_steps: 6
+  max_history_steps: 1
 
 eval:
   enabled: false
   interval_steps: 5
   held_out_tasks: []
   seeds_per_task: 1
-  max_episode_steps: 8
+  max_episode_steps: 6
 
 reporting:
   enabled: true

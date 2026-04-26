@@ -1,0 +1,76 @@
+{
+  "adapter_spec": null,
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "by_task": {
+    "edge_row_quality_bar": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.065,
+      "mean_steps": 20,
+      "mean_total_reward": 0.025,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "honest_partial_report_open_items": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.1,
+      "mean_steps": 20,
+      "mean_total_reward": 0.137,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "privacy_safe_alternate_evidence": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.09,
+      "mean_steps": 20,
+      "mean_total_reward": 0.176,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "return_margin_decision_point": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.1,
+      "mean_steps": 20,
+      "mean_total_reward": 0.1546,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "route_replan_when_primary_viewpoint_blocked": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.09,
+      "mean_steps": 11.5,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "scheduled_crane_window_wait_or_detour": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.1,
+      "mean_steps": 20,
+      "mean_total_reward": 0.086,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "strict_severity_weighted_triage": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0875,
+      "mean_steps": 20,
+      "mean_total_reward": 0.136,
+      "n": 2,
+      "success_rate": 0.0
+    }
+  },
+  "elapsed_secs": 431.43802309036255,
+  "failure_modes": {
+    "no_submit": 1.0
+  },
+  "max_episode_steps": 20,
+  "mean_process_reward": 0.09035714285714286,
+  "mean_steps": 18.785714285714285,
+  "mean_terminal_reward": 0.011728571428571425,
+  "mean_total_reward": 0.10208571428571428,
+  "n": 14,
+  "parse_error_rate": 0.0,
+  "seeds_per_task": 2,
+  "success_rate": 0.0,
+  "variant": "base"
+}

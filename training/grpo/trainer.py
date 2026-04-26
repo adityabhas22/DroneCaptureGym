@@ -132,11 +132,20 @@ class GRPOTrainer:
         )
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        # Group-batched rollouts call ``model.generate()`` on G prompts at
+        # once. HF generate requires LEFT padding for decoder-only LMs so
+        # all prompts end at the same column when generation begins.
+        self.tokenizer.padding_side = "left"
 
-        LOG.info("loading base model: %s (%s)", config.model_name, self.dtype)
+        LOG.info(
+            "loading base model: %s (%s, attn=sdpa)",
+            config.model_name,
+            self.dtype,
+        )
         base = AutoModelForCausalLM.from_pretrained(
             config.model_name,
             torch_dtype=self.dtype,
+            attn_implementation="sdpa",
         )
         base.gradient_checkpointing_enable()
 
@@ -278,6 +287,53 @@ class GRPOTrainer:
         finally:
             self.model.train(was_training)
 
+    def _forward_logprobs_chunked(
+        self,
+        batch: dict[str, torch.Tensor],
+        *,
+        chunk_size: int,
+    ) -> torch.Tensor:
+        """No-grad logprobs computed in batch-dim chunks.
+
+        ``outputs.logits`` is ``[B, T, V]``. For Qwen3-4B with ``V=152K``,
+        a single forward over the full B=32 batch padded to a few thousand
+        tokens trips OOM even on H200. Chunking the batch and freeing the
+        intermediate logits between chunks keeps peak memory bounded.
+        """
+        torch_ = self._torch
+        bsz = int(batch["input_ids"].shape[0])
+        chunk_size = max(1, int(chunk_size))
+        chunks: list[torch.Tensor] = []
+        for start in range(0, bsz, chunk_size):
+            end = min(start + chunk_size, bsz)
+            sub = {k: v[start:end] for k, v in batch.items()}
+            lp, _ = self._forward_logprobs(sub, train_mode=False, compute_entropy=False)
+            chunks.append(lp.detach())
+            del lp, sub
+            if torch_.cuda.is_available():
+                torch_.cuda.empty_cache()
+        return torch_.cat(chunks, dim=0)
+
+    def _forward_ref_logprobs_chunked(
+        self,
+        batch: dict[str, torch.Tensor],
+        *,
+        chunk_size: int,
+    ) -> torch.Tensor:
+        torch_ = self._torch
+        bsz = int(batch["input_ids"].shape[0])
+        chunk_size = max(1, int(chunk_size))
+        chunks: list[torch.Tensor] = []
+        for start in range(0, bsz, chunk_size):
+            end = min(start + chunk_size, bsz)
+            sub = {k: v[start:end] for k, v in batch.items()}
+            lp = self._forward_ref_logprobs(sub)
+            chunks.append(lp.detach())
+            del lp, sub
+            if torch_.cuda.is_available():
+                torch_.cuda.empty_cache()
+        return torch_.cat(chunks, dim=0)
+
     # ---------- Main training step ----------
 
     def step(self, step_idx: int, rng: random.Random) -> StepMetrics:
@@ -304,6 +360,8 @@ class GRPOTrainer:
             max_steps=cfg.rollout.max_episode_steps,
         )
         t_rollout = time.perf_counter() - t0
+        if torch_.cuda.is_available():
+            torch_.cuda.empty_cache()
         # Keep ordering aligned with specs but drop failures.
         outputs: list[GRPORolloutOutput] = [o for o in outputs_with_none if o is not None]
         if not outputs:
@@ -354,9 +412,17 @@ class GRPOTrainer:
         bsz = int(batch["input_ids"].shape[0])
 
         # 5. Forward pass for old log-probs and ref log-probs (no grad).
+        # Chunk along batch dim to keep peak memory bounded — a single
+        # forward over the full padded batch materializes
+        # ``[B, T, vocab]`` logits which OOMs even on H200 for V≈150K.
         t0 = time.perf_counter()
-        old_logprobs, _ = self._forward_logprobs(batch, train_mode=False, compute_entropy=False)
-        ref_logprobs = self._forward_ref_logprobs(batch)
+        chunk_size = max(1, int(cfg.micro_batch_size))
+        old_logprobs = self._forward_logprobs_chunked(batch, chunk_size=chunk_size)
+        if torch_.cuda.is_available():
+            torch_.cuda.empty_cache()
+        ref_logprobs = self._forward_ref_logprobs_chunked(batch, chunk_size=chunk_size)
+        if torch_.cuda.is_available():
+            torch_.cuda.empty_cache()
         t_forward = time.perf_counter() - t0
 
         response_mask_shifted = batch["response_mask"][:, 1:]
@@ -423,6 +489,8 @@ class GRPOTrainer:
                 )
                 self.optimizer.step()
                 update_metrics.append({**_avg(accum_metrics), "grad_norm": float(grad_norm)})
+                if torch_.cuda.is_available():
+                    torch_.cuda.empty_cache()
         t_update = time.perf_counter() - t0
 
         metrics = self._summarize_metrics(step_idx, outputs, kept_outputs, t_rollout, t_forward, t_update)

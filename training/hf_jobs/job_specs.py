@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-JobType = Literal["sft", "ppo", "grpo"]
+JobType = Literal["sft", "ppo", "grpo", "eval"]
 
 
 # Default container — already has cuda + torch + transformers.
@@ -49,11 +49,18 @@ DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
     "ppo": "a100-large", # 4B PPO smoke/default: avoid H200 until preflight passes.
     "grpo": "l40sx1",   # GRPO drops vLLM, so 4B fits comfortably in L40S 48 GB.
+    # Eval is pure inference (no optimizer, no ref-forward, short generations)
+    # so the cheaper L40S tier easily covers it. The variant loop reloads the
+    # base each time so peak VRAM stays well below 24 GB.
+    "eval": "l40sx1",
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
     "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
     "ppo": "4h",        # Smoke/tiny PPO default; extend explicitly for larger runs.
     "grpo": "4h",       # HF generate is slower than vLLM; 4h covers a 10-step tiny run.
+    # 7 tasks × 2 seeds × 3 variants × ~30 generates × 1.5s ~= 30 min; budget 1h
+    # for setup + push + safety margin.
+    "eval": "1h",
 }
 
 
@@ -112,7 +119,7 @@ def build_job_spec(
         config the trainer reads.
     """
 
-    if job_type not in ("sft", "ppo", "grpo"):
+    if job_type not in ("sft", "ppo", "grpo", "eval"):
         raise ValueError(f"unsupported job_type: {job_type!r}")
 
     flavor = hardware or DEFAULT_HARDWARE_BY_JOB[job_type]

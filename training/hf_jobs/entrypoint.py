@@ -293,6 +293,75 @@ def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, outpu
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
 
+def _run_eval(*, repo_dir: Path, base_model: str, output_dir: Path) -> None:
+    """Run training.eval_grpo across one or more variants in a single job.
+
+    Variant specs are passed via the ``DRONECAPTUREOPS_EVAL_VARIANTS`` env
+    var, pipe-separated to keep them shell-safe inside the bootstrap
+    command. Each variant is forwarded to ``--variant``; the eval module
+    parses its own ``base``, ``name=adapter``, and ``name:repo:subfolder``
+    forms (see ``training/eval_grpo.py``).
+
+    All other knobs (seeds-per-task, max-episode-steps, max-tokens, etc.)
+    use sensible eval defaults and can be overridden by setting
+    ``DRONECAPTUREOPS_EVAL_<NAME>`` env vars before launching.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _wait_for_cuda_ready()
+
+    eval_module = repo_dir / "training" / "eval_grpo.py"
+    if not eval_module.exists():
+        raise SystemExit(
+            "training/eval_grpo.py is missing from the repo snapshot — "
+            "verify the launcher packaged the latest revision."
+        )
+
+    raw_variants = os.environ.get("DRONECAPTUREOPS_EVAL_VARIANTS", "").strip()
+    if not raw_variants:
+        raise SystemExit(
+            "eval job requires DRONECAPTUREOPS_EVAL_VARIANTS to be set "
+            "(pipe-separated list of variant specs, e.g. "
+            "'base|sft:adityabhaskara/...|grpo:rachit-suresh/...:output/final_10/adapter')."
+        )
+    variants = [v.strip() for v in raw_variants.split("|") if v.strip()]
+
+    seeds_per_task = os.environ.get("DRONECAPTUREOPS_EVAL_SEEDS", "2")
+    max_episode_steps = os.environ.get("DRONECAPTUREOPS_EVAL_MAX_EPISODE_STEPS", "20")
+    max_tokens = os.environ.get("DRONECAPTUREOPS_EVAL_MAX_TOKENS", "256")
+    max_history_steps = os.environ.get("DRONECAPTUREOPS_EVAL_MAX_HISTORY", "4")
+    temperature = os.environ.get("DRONECAPTUREOPS_EVAL_TEMPERATURE", "0.4")
+
+    cmd: list[str] = [
+        sys.executable,
+        "-m",
+        "training.eval_grpo",
+        "--base-model",
+        base_model,
+        "--seeds-per-task",
+        seeds_per_task,
+        "--max-episode-steps",
+        max_episode_steps,
+        "--max-tokens",
+        max_tokens,
+        "--max-history-steps",
+        max_history_steps,
+        "--temperature",
+        temperature,
+        "--output-dir",
+        str(output_dir),
+    ]
+    for v in variants:
+        cmd.extend(["--variant", v])
+    tasks_override = os.environ.get("DRONECAPTUREOPS_EVAL_TASKS")
+    if tasks_override:
+        cmd.append("--tasks")
+        cmd.extend(t.strip() for t in tasks_override.split(",") if t.strip())
+
+    LOG.info("running eval driver: %s", " ".join(cmd))
+    subprocess.check_call(cmd, cwd=str(repo_dir))
+
+
 def _run_grpo_trainer(*, repo_dir: Path, base_model: str, config_path: str, output_dir: Path) -> None:
     """Run training.train_grpo with the in-job paths and base model.
 
@@ -375,14 +444,19 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     _configure_gpu_runtime_env()
     parser = argparse.ArgumentParser(description="In-job entrypoint for DroneCaptureOps training on HF Jobs.")
-    parser.add_argument("job_type", choices=["sft", "ppo", "grpo"])
+    parser.add_argument("job_type", choices=["sft", "ppo", "grpo", "eval"])
     args, extra = parser.parse_known_args()
 
     token = _hf_token()
     repo_dataset = _required_env("DRONECAPTUREOPS_REPO_DATASET")
     output_repo = _required_env("DRONECAPTUREOPS_OUTPUT_REPO")
     base_model = _required_env("DRONECAPTUREOPS_BASE_MODEL")
-    config_path = _required_env("DRONECAPTUREOPS_CONFIG")
+    # Eval doesn't read a YAML config — it picks tasks from the env or
+    # uses the built-in held-out list — so don't make it mandatory.
+    if args.job_type == "eval":
+        config_path = os.environ.get("DRONECAPTUREOPS_CONFIG", "")
+    else:
+        config_path = _required_env("DRONECAPTUREOPS_CONFIG")
     data_dataset = os.environ.get("DRONECAPTUREOPS_DATA_DATASET")
 
     git_rev = os.environ.get("DRONECAPTUREOPS_GIT_REV", "unknown")
@@ -426,6 +500,12 @@ def main() -> int:
             repo_dir=repo_dir,
             base_model=base_model,
             config_path=config_path,
+            output_dir=output_dir,
+        )
+    elif args.job_type == "eval":
+        _run_eval(
+            repo_dir=repo_dir,
+            base_model=base_model,
             output_dir=output_dir,
         )
     else:

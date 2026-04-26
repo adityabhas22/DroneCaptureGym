@@ -1,11 +1,22 @@
-# GRPO tiny learning — high-KL-penalty branch.
-# Same shape as grpo_tiny_4b_l40.yaml; only kl_coef differs.
+# GRPO fast H200 — sized to fit a 1-hour HF Job end-to-end.
+#
+# Phase budget (target):
+#   - image + pip install: ~5-8 min
+#   - base model + SFT LoRA load: ~1-2 min
+#   - training loop (20 steps): <= 45 min
+#   - save adapter + push to hub: ~1-2 min
+#
+# Per-step budget assumes group-batched generate (batch=group_size) + SDPA:
+#   - calls/step = prompts_per_step * max_episode_steps = 4 * 4 = 16
+#   - each batched generate (G=8 prompts, 128 new tokens) ~3-5s on H200 bf16
+#   - rollout: 50-80s, update: 20-30s, total ~80-110s per step
+#   - 20 steps -> 27-37 min, leaving headroom inside the 45-min budget.
 
 model_name: Qwen/Qwen3-4B-Instruct-2507
 tokenizer_name: null
 sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
 allow_fresh_lora: false
-output_dir: artifacts/grpo-tiny-4b-kl02/checkpoints
+output_dir: artifacts/grpo-fast-4b-h200/checkpoints
 
 max_prompt_length: 2048
 max_total_length: 8192
@@ -14,8 +25,8 @@ pad_to_multiple_of: 8
 grpo_epochs: 1
 minibatch_size: 1
 micro_batch_size: 1
-total_steps: 10
-save_interval_steps: 5
+total_steps: 20
+save_interval_steps: 10
 log_interval_steps: 1
 
 lora:
@@ -35,7 +46,7 @@ optimizer:
 algorithm:
   eps_clip_low: 0.2
   eps_clip_high: 0.2
-  kl_coef: 0.02
+  kl_coef: 0.005
   kl_estimator: k3
   entropy_coef: 0.001
   adv_eps: 1.0e-4
@@ -44,19 +55,19 @@ algorithm:
 
 rollout:
   prompts_per_step: 4
-  group_size: 4
+  group_size: 8
   temperature: 0.9
   top_p: 1.0
-  max_new_tokens_per_turn: 160
-  max_episode_steps: 6
+  max_new_tokens_per_turn: 128
+  max_episode_steps: 4
   max_history_steps: 1
 
 eval:
   enabled: false
-  interval_steps: 5
+  interval_steps: 10
   held_out_tasks: []
   seeds_per_task: 1
-  max_episode_steps: 6
+  max_episode_steps: 4
 
 reporting:
   enabled: true
@@ -74,5 +85,5 @@ train_tasks:
 seed: 4242
 
 wandb_project: dronecaptureops-grpo
-wandb_run_name: tiny-learning-4b-l40-kl02
+wandb_run_name: fast-4b-h200
 wandb_mode: disabled

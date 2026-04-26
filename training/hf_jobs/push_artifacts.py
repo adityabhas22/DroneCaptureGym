@@ -73,14 +73,35 @@ def repo_tarball_bytes(repo_root: Path, *, exclude: Iterable[str] | None = None)
 
 
 def ensure_dataset_repo(api, repo_id: str, *, private: bool = True) -> None:
-    """Create a private dataset repo if it doesn't exist (idempotent)."""
+    """Create a private dataset repo if it doesn't exist (idempotent).
 
+    Probe via ``repo_info`` before calling ``create_repo`` so we don't
+    require dataset-create permission in the target namespace when the
+    repo already exists. HF Hub tightened token scopes in 2026 and
+    ``create_repo(exist_ok=True)`` now returns 403 on no-create tokens
+    even when the repo exists; the HEAD probe sidesteps that.
+    """
+
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    try:
+        api.repo_info(repo_id=repo_id, repo_type="dataset")
+        return
+    except RepositoryNotFoundError:
+        pass
     api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
 
 
 def ensure_model_repo(api, repo_id: str, *, private: bool = True) -> None:
     """Create a private model repo if it doesn't exist (idempotent)."""
 
+    from huggingface_hub.errors import RepositoryNotFoundError
+
+    try:
+        api.repo_info(repo_id=repo_id, repo_type="model")
+        return
+    except RepositoryNotFoundError:
+        pass
     api.create_repo(repo_id=repo_id, repo_type="model", private=private, exist_ok=True)
 
 

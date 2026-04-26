@@ -18,7 +18,7 @@ allow_fresh_lora: false
 output_dir: artifacts/grpo-smoke-4b/checkpoints
 
 max_prompt_length: 2048
-max_total_length: 4096
+max_total_length: 8192
 pad_to_multiple_of: 8
 
 grpo_epochs: 1
@@ -57,9 +57,9 @@ rollout:
   group_size: 2
   temperature: 0.9
   top_p: 1.0
-  max_new_tokens_per_turn: 256
+  max_new_tokens_per_turn: 160
   max_episode_steps: 6
-  max_history_steps: 3
+  max_history_steps: 1
 
 eval:
   enabled: false
