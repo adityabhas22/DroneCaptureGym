@@ -10,8 +10,11 @@ tokenizer_name: null
 sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
 output_dir: artifacts/ppo-checkpoints
 
-max_prompt_length: 8192
-max_total_length: 32768
+# Memory-tuned for HFLocalEngine on H200 (140GB):
+# Engine + training share GPU. Original 32k context OOM'd at 130GB during
+# critic warmup backward. 12k cuts activation+grad memory ~3x vs 32k.
+max_prompt_length: 4096
+max_total_length: 12288
 pad_to_multiple_of: 8
 
 ppo_epochs: 2
@@ -21,8 +24,8 @@ total_steps: 50           # conservative for overnight; extend the winner if tim
 save_interval_steps: 10   # 5 checkpoints / run, durable to crashes
 log_interval_steps: 1
 
-vllm_gpu_memory_utilization: 0.4
-vllm_max_model_len: 32768
+vllm_gpu_memory_utilization: 0.4    # legacy field — HFLocalEngine ignores
+vllm_max_model_len: 12288           # legacy field — HFLocalEngine ignores
 vllm_dtype: bfloat16
 vllm_enforce_eager: false
 vllm_lora_dir: artifacts/ppo-lora-cache
@@ -55,13 +58,15 @@ algorithm:
   whiten_advantages: true
 
 rollout:
-  rollout_batch_size: 16
-  max_workers: 16
+  # Halved from 16/40/24 to fit 12k context budget on H200 sharing engine + trainer.
+  # Still gives 8 trajectories/step which is enough for stable advantages.
+  rollout_batch_size: 8
+  max_workers: 8
   temperature: 0.7
   top_p: 1.0
-  max_new_tokens_per_turn: 1024
-  max_episode_steps: 40
-  max_history_steps: 24
+  max_new_tokens_per_turn: 512
+  max_episode_steps: 20
+  max_history_steps: 12
 
 critic_warmup:
   enabled: true
@@ -80,7 +85,7 @@ eval:
     - return_margin_decision_point
     - route_replan_when_primary_viewpoint_blocked
   seeds_per_task: 3
-  max_episode_steps: 40
+  max_episode_steps: 20
 
 train_tasks: null
 seed: 42

@@ -433,6 +433,12 @@ class PPOTrainer:
         )
         t_rollout = time.perf_counter() - t0
 
+        # Free generation-time KV cache before the training forward/backward
+        # — engine and trainer share the same CUDA caching allocator, so without
+        # this the rollout's KV cache stays reserved and the backward pass OOMs.
+        if self.device.type == "cuda":
+            self._torch.cuda.empty_cache()
+
         # 2. Tokenize trajectories.
         tokenized: list[TokenizedTrajectory] = []
         per_traj_step_rewards: list[list[float]] = []
@@ -726,6 +732,10 @@ class PPOTrainer:
                 max_history_steps=cfg.rollout.max_history_steps,
                 max_steps=cfg.rollout.max_episode_steps,
             )
+            # Free engine KV cache before critic backward — same OOM concern as
+            # the main step (engine + trainer share the CUDA caching allocator).
+            if self.device.type == "cuda":
+                self._torch.cuda.empty_cache()
             # Build MC returns from per-step rewards (gamma-discounted from terminal back)
             tokenized = []
             mc_returns_list = []
