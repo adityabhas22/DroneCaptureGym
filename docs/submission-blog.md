@@ -267,17 +267,9 @@ Real artifacts that exist in this repo today:
 - TODO: add final training data / model metrics summary after the final run
   outputs are available.
 
-Current benchmark evidence from `artifacts/smoke-eval/summary.json`:
+Current SFT training snapshot:
 
-| policy | episodes | success_rate | mean_reward | mean_steps |
-| --- | ---: | ---: | ---: | ---: |
-| `scripted` | 3 | 100% | 1.000 | 24.0 |
-| `task_oracle` | 3 | 100% | 1.000 | 20.3 |
-| `random` | 3 | 0% | 0.051 | 27.0 |
-
-This is exactly the behavior we want from the environment as a benchmark:
-a policy that follows the inspection contract can solve the smoke tasks,
-while random tool use fails despite sometimes producing valid-looking actions.
+![Qwen3-4B LoRA SFT training metrics](assets/sft-training-metrics.png)
 
 The SFT and PPO artifacts should be read as training infrastructure and
 reproducibility evidence, not as a claim that a final RL policy already beats
