@@ -43,10 +43,14 @@ def _wait_for_cuda_ready(*, attempts: int | None = None, sleep_secs: int | None 
     would otherwise burn on download + pip install before vLLM dies.
     """
 
+    # Tightened: 5 × 12s = 60s budget. Stuck fabric never recovers (per
+    # the smoke-pipeline doc), so giving up faster lets the retry roulette
+    # spin through tokens quicker. 1 min is enough to confirm "permanently
+    # broken" without wasting time hoping it self-fixes.
     if attempts is None:
-        attempts = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_ATTEMPTS", "10"))
+        attempts = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_ATTEMPTS", "5"))
     if sleep_secs is None:
-        sleep_secs = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_SLEEP", "20"))
+        sleep_secs = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_SLEEP", "12"))
 
     probe = (
         "import torch; torch.cuda.init(); n=torch.cuda.device_count(); "
