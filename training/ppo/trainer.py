@@ -795,8 +795,12 @@ class PPOTrainer:
             )
             # Push warmup metrics to wandb so the dashboard isn't blank for the
             # entire warmup phase (which can be 50 steps × 3 min = 2.5h).
-            # Use NEGATIVE step indices so warmup curves don't collide with PPO
-            # step indices on the same wandb x-axis.
+            # Don't pass step= — wandb's step counter MUST be monotonically
+            # non-decreasing from its current value (starts at 0 from init).
+            # Negative steps are silently dropped (verified the hard way).
+            # Letting wandb auto-increment puts warmup at steps 1..N and the
+            # subsequent PPO `log_metrics` calls (which DO pass step=metrics.step)
+            # will still be accepted as long as PPO steps > N.
             if self._wandb is not None:
                 self._wandb.log(
                     {
@@ -808,7 +812,6 @@ class PPOTrainer:
                         "warmup/seq_len": int(seq_len),
                         "warmup/step": int(w),
                     },
-                    step=-(warmup_steps - w + 1),  # negative = warmup, monotone-up
                 )
 
         # Unfreeze actor
