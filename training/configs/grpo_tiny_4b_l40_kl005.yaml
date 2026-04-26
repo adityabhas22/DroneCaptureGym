@@ -1,0 +1,78 @@
+# GRPO tiny learning — low-KL branch.
+# Same shape as grpo_tiny_4b_l40.yaml; only kl_coef differs.
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+allow_fresh_lora: false
+output_dir: artifacts/grpo-tiny-4b-kl005/checkpoints
+
+max_prompt_length: 2048
+max_total_length: 4096
+pad_to_multiple_of: 8
+
+grpo_epochs: 1
+minibatch_size: 1
+micro_batch_size: 1
+total_steps: 10
+save_interval_steps: 5
+log_interval_steps: 1
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 5.0e-6
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  scheduler: cosine
+
+algorithm:
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  kl_coef: 0.005
+  kl_estimator: k3
+  entropy_coef: 0.001
+  adv_eps: 1.0e-4
+  clip_advantage: true
+  advantage_clip: 5.0
+
+rollout:
+  prompts_per_step: 4
+  group_size: 4
+  temperature: 0.9
+  top_p: 1.0
+  max_new_tokens_per_turn: 384
+  max_episode_steps: 8
+  max_history_steps: 4
+
+eval:
+  enabled: false
+  interval_steps: 5
+  held_out_tasks: []
+  seeds_per_task: 1
+  max_episode_steps: 8
+
+reporting:
+  enabled: true
+  rollouts_jsonl: rollouts/rollouts.jsonl
+  reports_dir: reports
+  traces_dir: traces
+  max_trace_samples_per_step: 2
+  include_messages: false
+
+train_tasks:
+  - basic_thermal_survey
+  - anomaly_confirmation
+  - pid_multi_row_pattern
+  - multi_anomaly_triage
+seed: 4242
+
+wandb_project: dronecaptureops-grpo
+wandb_run_name: tiny-learning-4b-l40-kl005
+wandb_mode: disabled

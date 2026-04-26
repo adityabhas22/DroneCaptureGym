@@ -1,0 +1,85 @@
+# GRPO infrastructure smoke — proves the no-vLLM HF-generate path works.
+#
+# Goals (in order):
+#   1. Trainer loads on L40S (or any single CUDA GPU) without OOM.
+#   2. SFT LoRA loads strictly via the same Hub spec PPO uses.
+#   3. One full GRPO step runs end-to-end: 1 prompt, 2 group samples,
+#      sequential rollouts via HFGeneratePolicy, group-normalized
+#      advantage, K-epoch update, JSONL metrics + per-step report.
+#
+# This config is NOT a learning run. It is a mechanics gate. Expect
+# zero-to-tiny reward signal because group_size=2 only gives one
+# meaningful comparison per step.
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+allow_fresh_lora: false
+output_dir: artifacts/grpo-smoke-4b/checkpoints
+
+max_prompt_length: 2048
+max_total_length: 4096
+pad_to_multiple_of: 8
+
+grpo_epochs: 1
+minibatch_size: 1
+micro_batch_size: 1
+total_steps: 1
+save_interval_steps: 1
+log_interval_steps: 1
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 5.0e-6
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  scheduler: cosine
+
+algorithm:
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  kl_coef: 0.01
+  kl_estimator: k3
+  entropy_coef: 0.001
+  adv_eps: 1.0e-4
+  clip_advantage: true
+  advantage_clip: 5.0
+
+rollout:
+  prompts_per_step: 1
+  group_size: 2
+  temperature: 0.9
+  top_p: 1.0
+  max_new_tokens_per_turn: 256
+  max_episode_steps: 6
+  max_history_steps: 3
+
+eval:
+  enabled: false
+  interval_steps: 1
+  held_out_tasks: []
+  seeds_per_task: 1
+  max_episode_steps: 6
+
+reporting:
+  enabled: true
+  rollouts_jsonl: rollouts/rollouts.jsonl
+  reports_dir: reports
+  traces_dir: traces
+  max_trace_samples_per_step: 1
+  include_messages: false
+
+train_tasks:
+  - basic_thermal_survey
+seed: 4242
+
+wandb_project: dronecaptureops-grpo
+wandb_run_name: smoke-4b-l40
+wandb_mode: disabled

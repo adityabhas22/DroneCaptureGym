@@ -190,7 +190,7 @@ def follow_logs(*, job_id: str, token: str, namespace: str | None = None) -> Non
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Launch DroneCaptureOps SFT or PPO on HF Jobs.")
-    parser.add_argument("job_type", choices=["sft", "ppo"], help="Which trainer to run.")
+    parser.add_argument("job_type", choices=["sft", "ppo", "grpo"], help="Which trainer to run.")
     parser.add_argument("--base-model", required=True, help="HF model ID to train (or pre-SFT'd checkpoint for PPO).")
     parser.add_argument("--output-repo", required=True, help="HF model repo to receive the trained adapter.")
     parser.add_argument("--sft-data", type=Path, default=Path("artifacts/sft/sft-warmstart.jsonl"),
@@ -244,6 +244,8 @@ def _resolve_token(*, required: bool = True) -> str:
 def _resolve_default_config(job_type: JobType) -> str:
     if job_type == "sft":
         return "training/configs/sft_train_default.yaml"
+    if job_type == "grpo":
+        return "training/configs/grpo_tiny_4b_l40.yaml"
     return "training/configs/ppo_train_default.yaml"
 
 

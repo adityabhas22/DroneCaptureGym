@@ -182,7 +182,13 @@ def _download_dataset(token: str, dataset_repo_id: str, target_dir: Path) -> Pat
 
 
 def _pip_install_repo(repo_dir: Path, *, job_type: str) -> None:
-    """Install repo deps. PPO needs the [ppo] extra (vllm); SFT just [train]."""
+    """Install repo deps.
+
+    - SFT and GRPO need only the ``[train]`` extra (HF transformers,
+      peft, trl, accelerate, datasets). GRPO does not require vLLM
+      because rollouts run via ``model.generate()`` directly.
+    - PPO needs the ``[ppo]`` extra which adds vLLM on top of train.
+    """
 
     extra = "ppo" if job_type == "ppo" else "train"
     LOG.info("installing repo deps via pip install -e .[%s]", extra)
@@ -287,6 +293,47 @@ def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, outpu
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
 
+def _run_grpo_trainer(*, repo_dir: Path, base_model: str, config_path: str, output_dir: Path) -> None:
+    """Run training.train_grpo with the in-job paths and base model.
+
+    GRPO uses HF ``model.generate()`` for rollouts (no vLLM), so we still
+    do the CUDA readiness probe (cheap defense) but skip the vLLM-
+    specific env vars.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _wait_for_cuda_ready()
+
+    train_grpo = repo_dir / "training" / "train_grpo.py"
+    if not train_grpo.exists():
+        raise SystemExit(
+            "training/train_grpo.py is missing from the repo snapshot — "
+            "verify the launcher packaged the latest revision."
+        )
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "training.train_grpo",
+        "--config",
+        str(repo_dir / config_path),
+        "--model",
+        base_model,
+        "--output-dir",
+        str(output_dir),
+    ]
+    sft_override = os.environ.get("DRONECAPTUREOPS_SFT_CKPT")
+    if sft_override:
+        cmd.extend(["--sft-checkpoint", sft_override])
+    if os.environ.get("DRONECAPTUREOPS_WANDB_MODE"):
+        cmd.extend(["--wandb-mode", os.environ["DRONECAPTUREOPS_WANDB_MODE"]])
+    if os.environ.get("DRONECAPTUREOPS_WANDB_RUN_NAME"):
+        cmd.extend(["--wandb-run-name", os.environ["DRONECAPTUREOPS_WANDB_RUN_NAME"]])
+
+    LOG.info("running GRPO trainer: %s", " ".join(cmd))
+    subprocess.check_call(cmd, cwd=str(repo_dir))
+
+
 # ---------------------------------------------------------------------------
 # Step 6: push outputs back
 # ---------------------------------------------------------------------------
@@ -328,7 +375,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     _configure_gpu_runtime_env()
     parser = argparse.ArgumentParser(description="In-job entrypoint for DroneCaptureOps training on HF Jobs.")
-    parser.add_argument("job_type", choices=["sft", "ppo"])
+    parser.add_argument("job_type", choices=["sft", "ppo", "grpo"])
     args, extra = parser.parse_known_args()
 
     token = _hf_token()
@@ -373,6 +420,13 @@ def main() -> int:
             dataset_path=dataset_path,
             output_dir=output_dir,
             output_repo=output_repo,
+        )
+    elif args.job_type == "grpo":
+        _run_grpo_trainer(
+            repo_dir=repo_dir,
+            base_model=base_model,
+            config_path=config_path,
+            output_dir=output_dir,
         )
     else:
         _run_ppo_trainer(

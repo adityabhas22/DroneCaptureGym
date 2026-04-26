@@ -94,6 +94,25 @@ def test_build_job_spec_ppo_uses_a100_smoke_default():
     assert "training.hf_jobs.entrypoint ppo" in spec.command[2]
 
 
+def test_build_job_spec_grpo_defaults_to_l40s_no_vllm():
+    spec = build_job_spec(
+        job_type="grpo",
+        repo_dataset_id="user/repo",
+        data_dataset_id="user/data",
+        output_repo_id="user/out",
+        base_model="Qwen/Qwen3-4B-Instruct-2507",
+        config_path_in_repo="training/configs/grpo_tiny_4b_l40.yaml",
+        hf_token="hf_fake",
+    )
+    # GRPO drops vLLM; L40S 48 GB fits 4B + LoRA + ref forward comfortably.
+    assert spec.flavor == "l40sx1"
+    assert spec.timeout == "4h"
+    assert spec.env["DRONECAPTUREOPS_JOB_TYPE"] == "grpo"
+    # The entrypoint subcommand is wired through the bash bootstrap.
+    assert "training.hf_jobs.entrypoint grpo" in spec.command[2]
+    assert spec.labels["job_type"] == "grpo"
+
+
 def test_build_job_spec_hardware_override():
     spec = build_job_spec(
         job_type="sft",

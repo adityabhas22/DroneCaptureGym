@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-JobType = Literal["sft", "ppo"]
+JobType = Literal["sft", "ppo", "grpo"]
 
 
 # Default container — already has cuda + torch + transformers.
@@ -42,16 +42,18 @@ DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 #
 # Smoke/scale guidance:
 #     --hardware l4x1          # cheapest 1.7B infra smoke, when available
-#     --hardware l40sx1        # cheap fallback smoke tier
+#     --hardware l40sx1        # cheap fallback smoke tier; default for GRPO
 #     --hardware a100-large    # first real 4B one-step PPO smoke
 #     --hardware h200          # only after smoke + tiny PPO are proven
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
     "ppo": "a100-large", # 4B PPO smoke/default: avoid H200 until preflight passes.
+    "grpo": "l40sx1",   # GRPO drops vLLM, so 4B fits comfortably in L40S 48 GB.
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
     "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
     "ppo": "4h",        # Smoke/tiny PPO default; extend explicitly for larger runs.
+    "grpo": "4h",       # HF generate is slower than vLLM; 4h covers a 10-step tiny run.
 }
 
 
@@ -110,7 +112,7 @@ def build_job_spec(
         config the trainer reads.
     """
 
-    if job_type not in ("sft", "ppo"):
+    if job_type not in ("sft", "ppo", "grpo"):
         raise ValueError(f"unsupported job_type: {job_type!r}")
 
     flavor = hardware or DEFAULT_HARDWARE_BY_JOB[job_type]
