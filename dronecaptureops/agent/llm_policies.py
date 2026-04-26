@@ -58,6 +58,7 @@ class _LLMPolicyBase:
 
     env: DroneCaptureOpsEnvironment
     task_id: str | None = None
+    user_instruction: str | None = None
     max_history_steps: int = 12
     name: str = "llm"
     _messages: list[dict[str, Any]] = field(default_factory=list, init=False)
@@ -74,7 +75,14 @@ class _LLMPolicyBase:
                 task = get_solar_task(self.task_id)
             except ValueError:
                 task = None
-        self._messages = [build_system_message(registry=registry, world=world, task=task)]
+        self._messages = [
+            build_system_message(
+                registry=registry,
+                world=world,
+                task=task,
+                user_instruction=self.user_instruction,
+            )
+        ]
         self._initialised = True
 
     def _append_user(self, observation: DroneObservation) -> None:
@@ -113,12 +121,19 @@ class OpenAIChatPolicy(_LLMPolicyBase):
 
     def __post_init__(self) -> None:
         try:
-            from openai import OpenAI
+            from openai import OpenAI  # type: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover - exercised only in inference envs
             raise SystemExit("OpenAIChatPolicy requires `pip install openai`.") from exc
         self._client = OpenAI(
             base_url=self.api_base_url or os.getenv("OPENAI_API_BASE_URL") or os.getenv("API_BASE_URL"),
-            api_key=self.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_KEY") or "missing",
+            api_key=(
+                self.api_key
+                or os.getenv("OPENAI_API_KEY")
+                or os.getenv("OPENAI_KEY")
+                or os.getenv("GPT_API_KEY")
+                or os.getenv("GPT_TOKEN")
+                or "missing"
+            ),
         )
         self._tool_schemas = openai_tool_schemas(self.env._tools)  # noqa: SLF001
 
@@ -129,16 +144,39 @@ class OpenAIChatPolicy(_LLMPolicyBase):
             "model": self.model,
             "messages": self._trimmed(),
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
         }
+        if _prefers_max_completion_tokens(self.model):
+            kwargs["max_completion_tokens"] = self.max_tokens
+        else:
+            kwargs["max_tokens"] = self.max_tokens
         if self.use_tool_calls:
             kwargs["tools"] = self._tool_schemas
             kwargs["tool_choice"] = "auto"
-        response = self._client.chat.completions.create(**kwargs)
+        response = self._create_completion(kwargs)
         message = response.choices[0].message
         action = self._parse_response(message)
-        self._messages.append(_message_to_dict(message))
+        # The environment result is rendered in the next user observation, not
+        # as OpenAI `tool` role messages. Keep history provider-agnostic by
+        # storing the chosen action as plain assistant JSON.
+        self._append_assistant(action, use_tool_calls=False)
         return action
+
+    def _create_completion(self, kwargs: dict[str, Any]) -> Any:
+        try:
+            return self._client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - SDKs vary by model/API generation.
+            message = str(exc)
+            retry_kwargs = dict(kwargs)
+            should_retry = False
+            if "max_tokens" in retry_kwargs and "max_completion_tokens" in message:
+                retry_kwargs["max_completion_tokens"] = retry_kwargs.pop("max_tokens")
+                should_retry = True
+            if "Unsupported parameter" in message and "temperature" in message and "temperature" in retry_kwargs:
+                retry_kwargs.pop("temperature", None)
+                should_retry = True
+            if should_retry and retry_kwargs != kwargs:
+                return self._client.chat.completions.create(**retry_kwargs)
+            raise
 
     def _parse_response(self, message: Any) -> RawDroneAction:
         tool_calls = getattr(message, "tool_calls", None)
@@ -159,6 +197,11 @@ class OpenAIChatPolicy(_LLMPolicyBase):
         if not content.strip():
             raise ActionValidationError("model returned no tool_call and empty content")
         return parse_action(content)
+
+
+def _prefers_max_completion_tokens(model: str) -> bool:
+    model_id = model.lower()
+    return model_id.startswith(("gpt-5", "o1", "o3", "o4"))
 
 
 def _message_to_dict(message: Any) -> dict[str, Any]:
@@ -201,7 +244,7 @@ class AnthropicMessagesPolicy(_LLMPolicyBase):
 
     def __post_init__(self) -> None:
         try:
-            from anthropic import Anthropic
+            from anthropic import Anthropic  # type: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover
             raise SystemExit("AnthropicMessagesPolicy requires `pip install anthropic`.") from exc
         self._client = Anthropic(api_key=self.api_key or os.getenv("ANTHROPIC_API_KEY"))
@@ -296,6 +339,8 @@ class LocalHFPolicy(_LLMPolicyBase):
     """
 
     model: str = "Qwen/Qwen2.5-7B-Instruct"
+    base_model: str | None = None
+    adapter_path: str | None = None
     tokenizer_id: str | None = None
     temperature: float = 0.7
     max_new_tokens: int = 512
@@ -305,16 +350,24 @@ class LocalHFPolicy(_LLMPolicyBase):
 
     def __post_init__(self) -> None:
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover
             raise SystemExit("LocalHFPolicy requires `pip install transformers torch`.") from exc
-        tokenizer_id = self.tokenizer_id or self.model
+        model_id = self.base_model or self.model
+        tokenizer_id = self.tokenizer_id or model_id
         self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, trust_remote_code=self.trust_remote_code)
-        self._model = AutoModelForCausalLM.from_pretrained(
-            self.model,
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
             device_map=self.device,
             trust_remote_code=self.trust_remote_code,
         )
+        if self.adapter_path:
+            try:
+                from peft import PeftModel  # type: ignore[reportMissingImports]
+            except ImportError as exc:  # pragma: no cover
+                raise SystemExit("LocalHFPolicy adapter_path requires `pip install peft`.") from exc
+            model = PeftModel.from_pretrained(model, self.adapter_path)
+        self._model = model
 
     def next_action(self, observation: DroneObservation, context: AgentContext) -> RawDroneAction:
         self._ensure_initialised()

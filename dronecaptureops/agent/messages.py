@@ -25,13 +25,17 @@ def build_system_message(
     registry: ToolRegistry,
     world,
     task: SolarTaskSpec | None = None,
+    user_instruction: str | None = None,
 ) -> dict[str, str]:
     """One-shot system message including dynamic tool catalog and task header."""
 
     catalog = registry.catalog_as_json(world)
+    content = render_system_prompt(tool_catalog=catalog, task=task)
+    if user_instruction:
+        content += "\n\n# User Instruction\n" + user_instruction.strip()
     return {
         "role": "system",
-        "content": render_system_prompt(tool_catalog=catalog, task=task),
+        "content": content,
     }
 
 

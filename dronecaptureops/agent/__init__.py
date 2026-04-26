@@ -48,6 +48,14 @@ from dronecaptureops.agent.rollout import (
     RolloutStep,
     trajectory_to_chat_messages,
 )
+from dronecaptureops.agent.comparison import (
+    ComparisonRequest,
+    ComparisonResult,
+    ModelRunSpec,
+    ModelRunSummary,
+    build_policy_for_spec,
+    run_model_comparison,
+)
 from dronecaptureops.agent.schemas import (
     anthropic_tool_schemas,
     openai_tool_schemas,
@@ -76,7 +84,11 @@ __all__ = [
     "INTERFACE_VERSION",
     "SYSTEM_PROMPT",
     "AgentContext",
+    "ComparisonRequest",
+    "ComparisonResult",
     "Policy",
+    "ModelRunSpec",
+    "ModelRunSummary",
     "RandomPolicy",
     "RolloutResult",
     "RolloutRunner",
@@ -86,6 +98,7 @@ __all__ = [
     "TaskOraclePolicy",
     "act",
     "anthropic_tool_schemas",
+    "build_policy_for_spec",
     "build_assistant_message",
     "build_system_message",
     "build_tool_result_message",
@@ -95,6 +108,7 @@ __all__ = [
     "render_initial_observation",
     "render_observation",
     "render_system_prompt",
+    "run_model_comparison",
     "trajectory_to_chat_messages",
     "trajectory_to_messages",
 ]

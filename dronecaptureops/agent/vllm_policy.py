@@ -181,6 +181,7 @@ class VLLMPolicy:
     top_p: float = 0.9
     max_tokens: int = 1024
     max_history_steps: int = 12
+    user_instruction: str | None = None
     name: str = "vllm"
     lora_request: Any | None = None
     _messages: list[dict[str, Any]] = field(default_factory=list, init=False)
@@ -239,7 +240,12 @@ class VLLMPolicy:
                 task = get_solar_task(self.task_id)
             except ValueError:
                 task = None
-        system_msg = build_system_message(registry=registry, world=world, task=task)
+        system_msg = build_system_message(
+            registry=registry,
+            world=world,
+            task=task,
+            user_instruction=self.user_instruction,
+        )
         # Append a JSON schema reminder — models reproduce the contract more
         # reliably when they see the actual schema, even though our parser
         # accepts looser JSON-text.

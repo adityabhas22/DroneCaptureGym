@@ -229,6 +229,25 @@ SUITES: dict[str, ScenarioSuite] = {
             SuiteEpisode("blocked_corridor_replan", 2301, split="demo", tags=("demo", "hard")),
         ),
     ),
+    "demo_llm_inspection": ScenarioSuite(
+        name="demo_llm_inspection",
+        purpose=(
+            "Small task-conditioned suite for the live rich-sim UI: basic movement and capture, "
+            "anomaly confirmation, obstacle detours, low-battery return pressure, and privacy-safe evidence."
+        ),
+        episodes=make_task_episodes(
+            task_specs=(
+                ("basic_thermal_survey", "single_hotspot", 2501),
+                ("anomaly_confirmation", "single_hotspot", 2502),
+                ("obstacle_detour_inspection", "blocked_corridor_replan", 2503),
+                ("low_battery_inspection", "low_battery_tradeoff", 2504),
+                ("privacy_safe_alternate_evidence", "false_positive_glare", 2505),
+            ),
+            split="demo",
+            tags=("demo", "live", "rich_sim"),
+            max_steps=40,
+        ),
+    ),
     "solar_tasks": ScenarioSuite(
         name="solar_tasks",
         purpose=(

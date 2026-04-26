@@ -10,6 +10,20 @@ def test_scenario_suites_are_centralized_and_deterministic():
     assert any(item.name == "hard_eval" for item in list_suites())
 
 
+def test_live_llm_demo_suite_is_task_conditioned():
+    suite = get_suite("demo_llm_inspection")
+
+    assert suite.episodes[0].episode_id == "task:basic_thermal_survey:2501"
+    assert suite.families == (
+        "single_hotspot",
+        "blocked_corridor_replan",
+        "low_battery_tradeoff",
+        "false_positive_glare",
+    )
+    assert all("rich_sim" in episode.tags for episode in suite.episodes)
+    assert all(episode.task_id for episode in suite.episodes)
+
+
 def test_resolved_suite_episode_builds_matching_scenario_family():
     episode = resolve_suite_episodes(suite_name="hard_eval")[0]
     scenario = ScenarioGenerator().build(

@@ -67,6 +67,7 @@ class _FakeOpenAIError(Exception):
 
 def test_hf_policy_requires_token_or_explicit_key(monkeypatch):
     monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HF_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
     monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
     from dronecaptureops.agent import HFInferencePolicy  # type: ignore[attr-defined]
@@ -152,28 +153,34 @@ def test_retries_on_503_model_loading():
 def test_does_not_retry_on_401_auth_error():
     """A bad token should fail immediately, not exhaust retries."""
 
+    from dronecaptureops.core.errors import ActionValidationError
+
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=7, task="basic_thermal_survey")
     obs = env.step({"tool_name": "get_telemetry", "arguments": {}})
 
     create_mock = MagicMock(side_effect=_FakeOpenAIError("Invalid token", 401))
     policy = _build_policy_with_mock_client(env, create_mock)
-    with pytest.raises(_FakeOpenAIError):
+    with pytest.raises(ActionValidationError, match="Invalid token"):
         policy.next_action(obs, AgentContext())
     assert create_mock.call_count == 1
+    assert policy.turns[0].api_error["status_code"] == 401
 
 
 def test_exhausts_retries_with_descriptive_error():
+    from dronecaptureops.core.errors import ActionValidationError
+
     env = DroneCaptureOpsEnvironment()
     env.reset(seed=7, task="basic_thermal_survey")
     obs = env.step({"tool_name": "get_telemetry", "arguments": {}})
 
     create_mock = MagicMock(side_effect=_FakeOpenAIError("Too many requests", 429))
     policy = _build_policy_with_mock_client(env, create_mock)
-    with pytest.raises(RuntimeError, match="exhausted .* retries"):
+    with pytest.raises(ActionValidationError, match="exhausted .* retries"):
         policy.next_action(obs, AgentContext())
     # max_retries=3 ⇒ 3 attempts.
     assert create_mock.call_count == 3
+    assert policy.turns[0].api_error["exc_type"] == "RuntimeError"
 
 
 # ---------------------------------------------------------------------------

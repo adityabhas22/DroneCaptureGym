@@ -9,6 +9,7 @@ description = "OpenEnv-compatible aerial inspection environment for high-level d
 requires-python = ">=3.10"
 dependencies = [
   "openenv-core>=0.2.3",
+  "openai>=1.0",
   "pydantic>=2.10",
   "pyyaml>=6.0",
   "fastapi>=0.110",
@@ -23,6 +24,8 @@ dev = [
 train = [
   "accelerate>=1.10",
   "datasets>=4.0",
+  "matplotlib>=3.8",
+  "numpy>=1.26",
   # peft 0.19.x added `from transformers.conversion_mapping import ...` which
   # only exists in transformers 4.58+ / 5.x, and the HF transformers-pytorch-gpu
   # image ships an older transformers that even pip's >=4.55 upgrade doesn't
@@ -35,6 +38,7 @@ train = [
   "trl>=0.23.1,<1.2",
   "torch>=2.4",
   "transformers>=4.55",
+  "tensorboard>=2.16",
   "wandb>=0.18",
 ]
 ppo = [
@@ -74,6 +78,9 @@ dronecaptureops-eval-policy = "training.eval_policy:main"
 [tool.setuptools.packages.find]
 include = ["dronecaptureops*", "server*"]
 exclude = ["tests*", "training*", "examples*", "docs*", "artifacts*"]
+
+[tool.setuptools.package-data]
+server = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DroneCaptureOps — Mission Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main class="console">
+      <header class="console__topbar">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 28 28" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="14" cy="14" r="11" />
+              <path d="M3 14h22M14 3v22" />
+              <path d="M14 14l7-4M14 14l-7 4" />
+            </svg>
+          </span>
+          <div>
+            <p class="brand__eyebrow">DroneCaptureOps</p>
+            <h1 class="brand__title">Mission <em>Console</em></h1>
+          </div>
+        </div>
+
+        <div class="status-strip" aria-live="polite">
+          <div class="status-clock">
+            <span class="status-clock__label">Mission clock</span>
+            <strong id="missionClock">T+ 00:00</strong>
+          </div>
+          <div class="status-pills">
+            <span id="missionTitle" class="status-pill status-pill--ghost">Awaiting brief</span>
+            <span id="apiMode" class="status-pill">API · probing</span>
+            <span id="sessionId" class="status-pill status-pill--muted">session · none</span>
+            <span id="connectionState" class="status-pill status-pill--hot">offline</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="hero" aria-label="Tactical scene">
+        <div class="hero__scene-frame">
+          <div class="hero__scene-tag">
+            <span class="dot"></span>
+            <span>Site geometry · live</span>
+          </div>
+
+          <div class="scene-stage">
+            <canvas id="sceneCanvas" width="1600" height="900" aria-label="Drone mission scene"></canvas>
+
+            <div class="scene-hud scene-hud--tl" id="hudTelemetry">
+              <p class="scene-hud__label">Pose</p>
+              <p id="hudPose" class="scene-hud__value">x — · y — · z —</p>
+              <p id="hudHeading" class="scene-hud__sub">hdg —°</p>
+            </div>
+
+            <div class="scene-hud scene-hud--tr" id="hudCamera">
+              <p class="scene-hud__label">Sensor</p>
+              <p id="hudSensor" class="scene-hud__value">—</p>
+              <p id="hudGimbal" class="scene-hud__sub">gimbal —° / —°</p>
+            </div>
+
+            <div class="scene-hud scene-hud--bl" id="hudCompass">
+              <p class="scene-hud__label">Compass</p>
+              <div class="compass">
+                <span class="compass__north">N</span>
+                <span class="compass__east">E</span>
+                <span class="compass__south">S</span>
+                <span class="compass__west">W</span>
+                <span id="compassNeedle" class="compass__needle"></span>
+              </div>
+            </div>
+
+            <div class="scene-hud scene-hud--br" id="hudScale">
+              <p class="scene-hud__label">Scale</p>
+              <div class="scale-bar"><span id="scaleBarFill"></span></div>
+              <p id="scaleLabel" class="scene-hud__sub">10 m</p>
+            </div>
+
+            <div class="scene-controls" role="group" aria-label="Camera controls">
+              <button class="scene-controls__btn" data-camera="zoom-out" type="button" aria-label="Zoom out">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="3" y1="8" x2="13" y2="8"/></svg>
+              </button>
+              <span id="zoomLevel" class="scene-controls__level">100%</span>
+              <button class="scene-controls__btn" data-camera="zoom-in" type="button" aria-label="Zoom in">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="3" y1="8" x2="13" y2="8"/><line x1="8" y1="3" x2="8" y2="13"/></svg>
+              </button>
+              <span class="scene-controls__sep" aria-hidden="true"></span>
+              <button class="scene-controls__btn scene-controls__btn--wide" data-camera="fit" type="button" aria-label="Fit scene to view">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/></svg>
+                <span>Fit</span>
+              </button>
+              <span class="scene-controls__hint" aria-hidden="true">drag · scroll · arrows · <kbd>+</kbd>/<kbd>−</kbd>/<kbd>F</kbd></span>
+            </div>
+
+            <div id="failureBanner" class="failure-banner" hidden></div>
+          </div>
+
+          <div class="phase-strip" id="phaseStrip" aria-label="Mission phase tracker"></div>
+        </div>
+
+        <aside class="briefing" aria-label="Mission briefing">
+          <div class="briefing__head">
+            <p class="eyebrow">Mission brief</p>
+            <h2 class="display-h2"><em>Inspection</em> directive</h2>
+          </div>
+          <p id="missionInstruction" class="briefing__instruction">No active brief. Reset a session to load mission objectives.</p>
+
+          <dl class="briefing__facts" id="briefingFacts"></dl>
+
+          <div class="briefing__section">
+            <p class="eyebrow">Suggested next moves</p>
+            <ul id="suggestedTools" class="suggest-list"></ul>
+          </div>
+
+          <div class="briefing__section">
+            <p class="eyebrow">Blockers</p>
+            <ul id="blockersList" class="blocker-list"></ul>
+          </div>
+        </aside>
+      </section>
+
+      <section class="instruments" aria-label="Telemetry instruments">
+        <article class="gauge gauge--ring">
+          <header>
+            <p class="eyebrow">Battery</p>
+            <h3 id="batteryHeadline" class="gauge__readout">—%</h3>
+            <p id="batteryReserve" class="gauge__sub">reserve —%</p>
+          </header>
+          <div class="gauge__visual">
+            <svg viewBox="0 0 140 140" class="ring" aria-hidden="true">
+              <circle cx="70" cy="70" r="58" class="ring__track" />
+              <circle cx="70" cy="70" r="58" class="ring__fill" id="batteryRingFill" />
+              <line x1="70" y1="12" x2="70" y2="20" class="ring__tick" id="batteryReserveTick" />
+            </svg>
+          </div>
+        </article>
+
+        <article class="gauge gauge--tape">
+          <header>
+            <p class="eyebrow">Altitude</p>
+            <h3 id="altitudeHeadline" class="gauge__readout">— m</h3>
+            <p id="altitudeBand" class="gauge__sub">band —</p>
+          </header>
+          <div class="alt-tape" id="altTape">
+            <div class="alt-tape__band"></div>
+            <span class="alt-tape__marker" id="altMarker"></span>
+          </div>
+        </article>
+
+        <article class="gauge gauge--metrics">
+          <header>
+            <p class="eyebrow">Flight</p>
+            <h3 id="speedHeadline" class="gauge__readout">— m/s</h3>
+            <p id="speedSub" class="gauge__sub">distance — m</p>
+          </header>
+          <ul class="micro-stats" id="flightMicro"></ul>
+        </article>
+
+        <article class="gauge gauge--metrics">
+          <header>
+            <p class="eyebrow">Reward</p>
+            <h3 id="rewardHeadline" class="gauge__readout gauge__readout--display">0.000</h3>
+            <p id="rewardMode" class="gauge__sub">nonterminal</p>
+          </header>
+          <div class="reward-strip" id="rewardComposition" aria-label="Reward composition"></div>
+          <ul class="micro-stats" id="rewardMicro"></ul>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel panel--controls" aria-label="Director controls">
+          <header class="panel__header">
+            <div>
+              <p class="eyebrow">Director controls</p>
+              <h2 class="display-h2"><em>Session</em> &amp; tools</h2>
+            </div>
+            <button id="refreshSessions" class="btn btn--ghost" type="button">Scan live</button>
+          </header>
+
+          <form id="sessionForm" class="form-stack">
+            <label class="field">
+              <span>Task ID</span>
+              <input id="taskInput" name="task" type="text" placeholder="anomaly_confirmation" autocomplete="off" />
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>Seed</span>
+                <input id="seedInput" name="seed" type="number" value="7" min="0" />
+              </label>
+              <label class="field">
+                <span>Backend</span>
+                <select id="backendInput" name="backend">
+                  <option value="geometry">geometry</option>
+                  <option value="sitl">SITL placeholder</option>
+                  <option value="mock-live">mock/live</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>Scenario family</span>
+              <input id="familyInput" name="scenario_family" type="text" placeholder="baseline_hotspot" autocomplete="off" />
+            </label>
+            <button class="btn btn--primary" type="submit">Reset Mission</button>
+          </form>
+
+          <div class="rule"></div>
+
+          <div class="form-stack" aria-label="AI mission run">
+            <header class="panel__header panel__header--inline">
+              <div>
+                <p class="eyebrow">AI mission run</p>
+                <h3 class="display-h3"><em>Prompt</em> to tools</h3>
+              </div>
+            </header>
+            <label class="field">
+              <span>Objective prompt</span>
+              <textarea id="objectivePrompt" spellcheck="true" rows="6">Inspect the assigned solar rows, capture grounded thermal/RGB evidence, avoid no-fly and privacy zones, return home, land, and submit a cited evidence pack.</textarea>
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>Policy</span>
+                <select id="modelPolicy">
+                  <option value="scripted">Scripted smoke test</option>
+                  <option value="openai">OpenAI GPT-5.4 Mini</option>
+                  <option value="hf" selected>HF router</option>
+                  <option value="local_hf">Local HF transformers</option>
+                  <option value="vllm">vLLM + optional LoRA</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="random">Random smoke test</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Max steps</span>
+                <input id="modelMaxSteps" type="number" value="12" min="1" max="100" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Model / base model</span>
+              <input id="modelName" type="text" value="Qwen/Qwen3-4B-Instruct-2507" placeholder="Qwen/Qwen3-4B-Instruct-2507 or local model name" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>API base URL</span>
+              <input id="modelApiBase" type="text" value="https://router.huggingface.co/v1" placeholder="leave blank for OpenAI; use https://router.huggingface.co/v1 for HF" autocomplete="off" />
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>API key</span>
+                <input id="modelApiKey" type="password" placeholder="optional / local" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Adapter path</span>
+                <input id="modelAdapterPath" type="text" placeholder="artifacts/ppo/rl1 or SFT LoRA path" autocomplete="off" />
+              </label>
+            </div>
+            <button id="runModelButton" class="btn btn--primary" type="button">Run AI mission</button>
+            <p class="hint">Choose OpenAI to run <code>gpt-5.4-mini</code> with the server-side OpenAI/GPT token from <code>.env</code>. HF still uses <code>HF_TOKEN</code>; leave API key blank unless overriding from the browser.</p>
+          </div>
+
+          <div class="rule"></div>
+
+          <div class="form-stack" aria-label="Replay generated trajectory">
+            <header class="panel__header panel__header--inline">
+              <div>
+                <p class="eyebrow">Dataset replay</p>
+                <h3 class="display-h3"><em>SFT</em> trajectory</h3>
+              </div>
+            </header>
+            <label class="field">
+              <span>JSON/JSONL source path</span>
+              <input id="replaySourcePath" type="text" placeholder="artifacts/sft/sft-warmstart.jsonl" autocomplete="off" />
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span>Record index</span>
+                <input id="replayRecordIndex" type="number" value="0" min="0" />
+              </label>
+              <button id="replayButton" class="btn btn--ghost" type="button">Replay record</button>
+            </div>
+            <p class="hint">Replays assistant tool calls from SFT messages, rollout JSON, trace steps, or explicit action lists into the same live event stream.</p>
+          </div>
+
+          <div class="rule"></div>
+
+          <div class="form-stack">
+            <header class="panel__header panel__header--inline">
+              <div>
+                <p class="eyebrow">Manual tool call</p>
+                <h3 class="display-h3"><em>Issue</em> command</h3>
+              </div>
+            </header>
+            <label class="field">
+              <span>Tool</span>
+              <select id="toolSelect"></select>
+            </label>
+            <label class="field">
+              <span>Arguments JSON</span>
+              <textarea id="argsInput" spellcheck="false" rows="6">{"altitude_m": 18}</textarea>
+            </label>
+            <div class="quick-actions" id="quickActions"></div>
+            <button id="stepButton" class="btn btn--accent" type="button">Execute step</button>
+          </div>
+
+          <div class="rule"></div>
+
+          <div class="form-stack" aria-label="Policy comparison">
+            <header class="panel__header panel__header--inline">
+              <div>
+                <p class="eyebrow">Policy comparison</p>
+                <h3 class="display-h3"><em>Base</em> vs <em>SFT</em> vs <em>RL</em></h3>
+              </div>
+            </header>
+            <label class="field">
+              <span>Model specs JSON</span>
+              <textarea id="compareSpecs" spellcheck="false" rows="7">[
+  {"name": "base-scripted", "policy": "scripted"},
+  {"name": "random-probe", "policy": "random"}
+]</textarea>
+            </label>
+            <div class="field-row">
+              <button id="compareButton" class="btn btn--ghost" type="button">Run comparison</button>
+              <button id="overlayButton" class="btn btn--ghost" type="button">Overlay best route</button>
+            </div>
+            <div id="compareResults" class="compare-results"></div>
+            <p class="hint">
+              Use <code>scripted</code>/<code>random</code> locally, or provide
+              <code>openai</code>, <code>anthropic</code>, <code>hf</code>, <code>local_hf</code>, or <code>vllm</code>
+              specs with model IDs and adapter paths.
+            </p>
+          </div>
+        </article>
+
+        <article class="panel panel--timeline" aria-label="Action timeline">
+          <header class="panel__header">
+            <div>
+              <p class="eyebrow">Action timeline</p>
+              <h2 class="display-h2"><em>Command</em> stream</h2>
+            </div>
+            <div class="panel__actions">
+              <span id="actionCount" class="status-pill status-pill--muted">0 calls</span>
+              <button id="clearLog" class="btn btn--ghost btn--sm" type="button">Clear</button>
+            </div>
+          </header>
+          <ol id="actionLog" class="action-log"></ol>
+        </article>
+
+        <article class="panel panel--captures" aria-label="Capture gallery">
+          <header class="panel__header">
+            <div>
+              <p class="eyebrow">Evidence locker</p>
+              <h2 class="display-h2"><em>Captures</em></h2>
+            </div>
+            <span id="artifactCount" class="status-pill status-pill--muted">0 artifacts</span>
+          </header>
+          <div id="captureList" class="capture-list"></div>
+        </article>
+      </section>
+
+      <footer class="console__footer">
+        <p>
+          <em>DroneCaptureOps Gym</em> · OpenEnv-compatible inspection benchmark · agent-visible state only.
+        </p>
+        <p>
+          <span class="dot dot--sage"></span> assets &middot;
+          <span class="dot dot--coral"></span> restricted &middot;
+          <span class="dot dot--amber"></span> viewpoints &middot;
+          <span class="dot dot--cream"></span> route &middot;
+          <span class="dot dot--lime"></span> captures
+        </p>
+      </footer>
+    </main>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

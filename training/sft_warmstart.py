@@ -382,6 +382,11 @@ def train(config: SFTTrainConfig) -> None:
         callbacks=callbacks,
     )
     trainer.train()
+    metrics_dir = output_dir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    (metrics_dir / "trainer_log_history.json").write_text(
+        json.dumps(trainer.state.log_history, indent=2, sort_keys=True)
+    )
     trainer.save_model(str(output_dir / "final"))
     tokenizer.save_pretrained(str(output_dir / "final"))
     LOG.info("training complete; final model written to %s", output_dir / "final")
@@ -452,10 +457,11 @@ def _apply_cli_overrides(config: SFTTrainConfig, args: argparse.Namespace) -> SF
         update["lora"] = config.lora.model_copy(update={"enabled": False})
     if args.no_eval:
         update["val_seed_fraction"] = 0.0
-    if args.hub_model_id is not None:
-        update["hub_model_id"] = args.hub_model_id
+    hub_model_id = getattr(args, "hub_model_id", None)
+    if hub_model_id is not None:
+        update["hub_model_id"] = hub_model_id
         update["push_to_hub"] = True
-    if args.no_push_to_hub:
+    if getattr(args, "no_push_to_hub", False):
         update["push_to_hub"] = False
     if not update:
         return config

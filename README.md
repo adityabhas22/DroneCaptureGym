@@ -4,6 +4,92 @@ DroneCaptureOps Gym is an OpenEnv-compatible environment for training LLM agents
 
 The benchmark focus is active visual inspection: deciding what evidence is missing, where to capture next, when to recapture, and whether the final evidence pack is grounded in real photos.
 
+## Hackathon Submission Status
+
+DroneCaptureOps Gym is a high-level aerial inspection environment for OpenEnv-style RL agents. It matters because real inspection agents must gather grounded RGB/thermal evidence, obey safety constraints, and submit reports that cite actual captured artifacts rather than hidden verifier state or invented photo IDs.
+
+Current submission links and evidence:
+
+- Hugging Face Space: `TODO_HF_SPACE_URL`
+- Executed training notebook: `TODO_EXECUTED_TRAINING_NOTEBOOK_URL`
+- Experiment tracking: `TODO_EXPERIMENT_TRACKING_URL`
+- Loss plot: `TODO_LOSS_PLOT_URL`
+- Reward plot: `TODO_REWARD_PLOT_URL`
+- Trained model or adapter: `TODO_TRAINED_MODEL_OR_ADAPTER_URL`
+- Writeup or video: `TODO_WRITEUP_OR_VIDEO_URL`
+- Optional presentation: `TODO_OPTIONAL_PRESENTATION_URL`
+
+Real training evidence is pending until an actual training run is completed and the tracker, loss plot, reward plot, and model or adapter links above are replaced with real URLs. Do not treat placeholder links as submitted evidence.
+
+Environment summary:
+
+- Action space: structured `RawDroneAction` tool calls with `tool_name` and `arguments`, covering mission review, map queries, safe flight, gimbal/camera control, RGB/thermal capture, capture inspection, return-home, landing, and evidence-pack submission.
+- Observation space: visible `DroneObservation` data only, including mission checklist, telemetry, visible site map, public assets, captured evidence artifacts, affordances, warnings, checklist status, reward breakdown, and latest action result. Hidden defects, true asset state, hidden weather details, and verifier evidence requirements are not exposed.
+- Reward shape: dense shaping reward during collection, then terminal mission score after `submit_evidence_pack`, capped by safety and evidence-integrity gates. Fake photo IDs or unsupported report claims reduce the final score through the integrity gate.
+- Default baseline tasks: `basic_thermal_survey`, `anomaly_confirmation`, and `audit_grade_strict_grounding`.
+
+Submission commands:
+
+```bash
+python3.11 inference.py --policy scripted
+python3.11 inference.py --task basic_thermal_survey --policy scripted
+```
+
+Docker and local server:
+
+```bash
+docker build -t dronecaptureops-gym .
+docker run --rm -p 8000:8000 dronecaptureops-gym
+curl -s -o /dev/null -w "%{http_code}" -X POST \
+  http://127.0.0.1:8000/reset \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Validation:
+
+```bash
+python3.11 -m pytest
+openenv validate
+bash -n scripts/validate-submission.sh
+./scripts/validate-submission.sh http://127.0.0.1:8000 .
+```
+
+Training and notebook:
+
+```bash
+python -m training.generate_sft_data \
+  --config training/configs/sft_default.yaml \
+  --output artifacts/sft/sft-warmstart.jsonl
+
+python -m training.sft_warmstart \
+  --config training/configs/sft_train_default.yaml \
+  --dataset artifacts/sft/sft-warmstart.jsonl
+```
+
+Judge notebook path: `training/colab_training_template.ipynb`.
+
+Hugging Face Space deployment commands, once `HF_TOKEN` is available:
+
+```bash
+pip install -U huggingface_hub
+hf auth login --token "$HF_TOKEN"
+export SPACE_ID="<HF_USERNAME>/dronecaptureops-gym"
+python - <<'PY'
+import os
+from huggingface_hub import HfApi
+
+HfApi().create_repo(
+    repo_id=os.environ["SPACE_ID"],
+    repo_type="space",
+    space_sdk="docker",
+    exist_ok=True,
+)
+PY
+hf upload "$SPACE_ID" . . --repo-type space
+./scripts/validate-submission.sh "https://${SPACE_ID/\//-}.hf.space" .
+```
+
 ## What Exists Now
 
 - Deterministic `FastGeometrySim` style backend through `GeometryController`.
@@ -12,6 +98,8 @@ The benchmark focus is active visual inspection: deciding what evidence is missi
 - High-level tool registry with schema validation.
 - Safety wrapper before flight/gimbal actions.
 - Structured RGB/thermal capture-quality metadata.
+- Rich-sim scene serialization and a FastAPI-mounted browser console at `/ui/` for live state, action logs, captures, rewards, and comparison runs.
+- A live-session API under `/live/*` for deterministic manual steps, event replay, and base/SFT/RL-style model comparison specs.
 - DroneKit-inspired rich telemetry and generic inspection assets documented in [docs/environment-model-v2.md](docs/environment-model-v2.md).
 - Solar scenario families and tool-surface research notes in [docs/solar-scenario-research.md](docs/solar-scenario-research.md).
 - Composable reward breakdown with safety gate and report-grounding checks.
@@ -29,8 +117,9 @@ dronecaptureops/
   rewards/       reward components and aggregation
   tools/         public tool registry and handlers
   generation/    domain/seed scenario generator
+  rich_sim/      renderer-friendly scene/event serialization
   utils/         math, geo, logging, serialization helpers
-server/          OpenEnv FastAPI entrypoint
+server/          OpenEnv + live-session FastAPI entrypoint and static UI
 training/        GRPO/eval scaffolds
 examples/        random and scripted rollouts
 tests/           fast deterministic tests
@@ -67,7 +156,7 @@ pytest                                                 # 1. fast deterministic t
 python examples/run_scripted_agent.py                  # 2. run one solved episode locally
 python -m training.run_suite --suite smoke --policy scripted   # 3. run a baseline suite
 python -m training.trace_episode --suite demo --episode-index 0 --policy scripted --output-dir artifacts/trace-demo   # 4. dump a per-step trace
-dronecaptureops-server                                 # 5. start the OpenEnv HTTP server (Ctrl-C to stop)
+dronecaptureops-server                                 # 5. start OpenEnv + live UI, then open http://localhost:8000/ui/
 ```
 
 ## Run Tests
@@ -94,7 +183,7 @@ python -m training.run_suite --suite hard_eval --policy weak_scripted --output r
 python -m training.trace_episode --suite demo --episode-index 0 --policy scripted --output-dir artifacts/trace-demo
 ```
 
-Available suites: `smoke`, `curriculum_easy`, `curriculum_medium`, `hard_eval`, `demo` (defined in `dronecaptureops/generation/suites.py`). Available policies: `random`, `weak_scripted`, `scripted`.
+Available suites: `smoke`, `curriculum_easy`, `curriculum_medium`, `hard_eval`, `demo`, `demo_llm_inspection`, and `solar_tasks` (defined in `dronecaptureops/generation/suites.py`). Available policies: `random`, `weak_scripted`, `scripted`.
 
 Trace output includes `episode_steps.json`, `evidence_log.json`, `route_log.json`, `inspection_report.json`, `trace.json`, and `trace.md`. Each step records the action, next observation, reward breakdown, reward deltas, warnings, and visible state changes so training runs can be debugged trajectory by trajectory.
 
@@ -102,7 +191,7 @@ Trace output includes `episode_steps.json`, `evidence_log.json`, `route_log.json
 
 There are two orthogonal selectors and they do different things:
 
-- **Task ID** (`env.reset(task="anomaly_confirmation")`, alias `task_id=`) picks a deterministic *mission variant* from `dronecaptureops/tasks/solar_tasks.py`. The 15 solar tasks override hidden defects, weather, battery, step budget, extra zones/viewpoints, and quality thresholds. They are the unit of RL task-conditioning.
+- **Task ID** (`env.reset(task="anomaly_confirmation")`, alias `task_id=`) picks a deterministic *mission variant* from `dronecaptureops/tasks/solar_tasks.py`. The solar tasks override hidden defects, weather, battery, step budget, extra zones/viewpoints, and quality thresholds. They are the unit of RL task-conditioning.
 - **Scenario suite** (`--suite smoke`) is a named bundle of `(scenario_family, seed)` pairs from `dronecaptureops/generation/suites.py` used for evaluation runs. Each suite episode uses the legacy seed/family randomized path, **not** a task ID. Suites are the unit of benchmark/regression reporting.
 
 Both go through the same `DroneCaptureOpsEnvironment.reset()` and produce a fully-formed `EpisodeWorld`; they just route through different branches of `SolarScenarioBuilder.build`. A task ID overrides scenario-family defaults when both are passed.
@@ -120,6 +209,60 @@ uvicorn server.app:app --host 0.0.0.0 --port 8000
 ```
 
 `openenv.yaml` points to `server.app:app`.
+
+The same server also mounts the rich-sim console and live APIs:
+
+```bash
+open http://localhost:8000/ui/
+```
+
+In the console, use **AI mission run** to enter a detailed objective prompt,
+choose a model/backend spec, and stream each model-selected tool call into the
+scene and command log. Use **Dataset replay** to pick an SFT/rollout JSONL
+record and render the stored assistant tool-call sequence through the same live
+event path.
+
+The AI mission panel defaults to HF router + `Qwen/Qwen3-4B-Instruct-2507`.
+`server.app` loads `.env` automatically, so an `HF_TOKEN` in that file is enough
+for the default run. Choose **OpenAI GPT-5.4 Mini** in the policy selector to
+run `gpt-5.4-mini`; the server will use `OPENAI_API_KEY`, `OPENAI_KEY`,
+`GPT_API_KEY`, or `GPT_TOKEN` from `.env`.
+
+Useful live endpoints:
+
+- `POST /live/sessions` — create/reset a live environment session.
+- `POST /live/sessions/{session_id}/step` — execute one `RawDroneAction` and append replay events.
+- `POST /live/sessions/{session_id}/run_model` — run one `ModelRunSpec` against the current live session, appending each model-selected tool call to the event log.
+- `POST /live/sessions/{session_id}/replay` — replay assistant tool calls from an SFT JSONL record, rollout JSON, trace steps, or an explicit `actions` list.
+- `GET /live/sessions/{session_id}/events` — replay session events with scene snapshots.
+- `POST /live/compare` — run multiple model specs on the same task/seed prompt contract.
+- `GET /live/tasks` and `GET /live/suites` — discover task IDs and suites for the UI.
+- `GET /live/diagnostics/logs?limit=200` — inspect recent backend diagnostics.
+
+Live-session diagnostics are also written as JSONL to
+`artifacts/live/live-server.jsonl` by default. Override with
+`DRONECAPTUREOPS_LIVE_LOG_PATH=/path/to/log.jsonl`.
+
+Example model run:
+
+```bash
+curl -X POST http://localhost:8000/live/sessions/demo/run_model \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id": "basic_thermal_survey",
+    "max_steps": 8,
+    "user_instruction": "Inspect the assigned solar rows, capture evidence, and return safely.",
+    "spec": {"name": "base", "policy": "hf", "model": "Qwen/Qwen3-4B-Instruct-2507"}
+  }'
+```
+
+Example SFT/trajectory replay:
+
+```bash
+curl -X POST http://localhost:8000/live/sessions/replay-demo/replay \
+  -H 'Content-Type: application/json' \
+  -d '{"source_path": "artifacts/sft/sft-warmstart.jsonl", "record_index": 0}'
+```
 
 ## Action Shape
 
