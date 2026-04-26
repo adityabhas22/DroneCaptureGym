@@ -718,9 +718,12 @@ class PPOTrainer:
                 group["lr"] = warmup_lr
 
         for w in range(1, warmup_steps + 1):
+            t_step = time.perf_counter()
+            LOG.info("critic warmup %d/%d: starting rollouts (n=%d)", w, warmup_steps, cfg.rollout.rollout_batch_size)
             specs = self._sample_specs(rng)
             engine = self._ensure_engine()
             lora_request = self._build_lora_request(step_id=0)  # SFT adapter
+            t_roll = time.perf_counter()
             outputs = run_rollout_batch(
                 specs,
                 engine=engine,
@@ -732,6 +735,9 @@ class PPOTrainer:
                 max_history_steps=cfg.rollout.max_history_steps,
                 max_steps=cfg.rollout.max_episode_steps,
             )
+            t_roll = time.perf_counter() - t_roll
+            mem_after_roll = self._torch.cuda.memory_allocated() / 1e9 if self.device.type == "cuda" else 0.0
+            LOG.info("critic warmup %d/%d: rollouts done in %.1fs (mem=%.1f GB)", w, warmup_steps, t_roll, mem_after_roll)
             # Free engine KV cache before critic backward — same OOM concern as
             # the main step (engine + trainer share the CUDA caching allocator).
             if self.device.type == "cuda":
@@ -778,8 +784,14 @@ class PPOTrainer:
             loss = 0.5 * masked_mean((values_aligned - targets).square(), mask)
             loss.backward()
             self.optimizer.step()
-            if w == 1 or w % 10 == 0:
-                LOG.info("critic warmup %d/%d: value_loss=%.4f", w, warmup_steps, float(loss.item()))
+            t_total = time.perf_counter() - t_step
+            mem_after_train = self._torch.cuda.memory_allocated() / 1e9 if self.device.type == "cuda" else 0.0
+            # Log EVERY step (no longer every 10) so we can see live progress
+            # in HF logs even when the wandb dashboard is the only real-time view.
+            LOG.info(
+                "critic warmup %d/%d: value_loss=%.4f roll=%.1fs total=%.1fs mem=%.1fGB n_traj=%d seq=%d",
+                w, warmup_steps, float(loss.item()), t_roll, t_total, mem_after_train, bsz, seq_len,
+            )
 
         # Unfreeze actor
         for name, p in self.model.named_parameters():

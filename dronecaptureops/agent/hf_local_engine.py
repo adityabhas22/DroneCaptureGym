@@ -233,6 +233,15 @@ class HFLocalEngine:
             gen_kwargs["stop_strings"] = list(head.stop)
             gen_kwargs["tokenizer"] = self.tokenizer
 
+        n_in_flight = 0
+        with self._pending_lock:
+            n_in_flight = len(self._pending)
+        LOG.info(
+            "engine: dispatching batch=%d (prompt_len=%d, max_new=%d, in_flight_after=%d)",
+            len(batch), prompt_len, head.max_tokens, n_in_flight,
+        )
+        t0 = time.perf_counter()
+
         with self.gen_lock:
             was_training = self.model.training
             self.model.eval()
@@ -241,6 +250,13 @@ class HFLocalEngine:
                     out = self.model.generate(**enc, **gen_kwargs)
             finally:
                 self.model.train(was_training)
+        t_gen = time.perf_counter() - t0
+        n_new = out.shape[1] - prompt_len
+        total_new_tokens = n_new * len(batch)
+        LOG.info(
+            "engine: batch=%d done in %.1fs (%.0f tok/s aggregate, %d new tok/req)",
+            len(batch), t_gen, total_new_tokens / max(t_gen, 1e-6), n_new,
+        )
 
         # Decode the generated completion (everything after the prompt).
         # Note: with left-padding, prompt occupies the LAST `prompt_len` slots
