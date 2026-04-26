@@ -1,15 +1,17 @@
-# PPO SHORT — kl=0.02, designed to finish in ~90 min as insurance.
+# PPO SHORT — kl=0.005, designed to finish in ~75-90 min for hackathon demo.
 #
-# Cuts vs ppo_run01_kl002.yaml:
-# - critic_warmup.steps:  50 → 10  (value head won't fully converge but
-#   still much better than zero-init; first 5-10 steps capture most gain)
-# - total_steps:          50 → 20  (gets us a real-trained adapter, just less
-#   optimized than the full sweep)
-# - save_interval_steps:  10 → 5   (4 checkpoints during training)
-# - eval.interval_steps:  25 → 20  (single mid/end eval)
+# Why kl=0.005 not kl=0.02: in 25 PPO steps a 0.02 KL coef barely moves the
+# policy (tight constraint). 0.005 lets the policy drift enough to show
+# visible improvement vs SFT in this short window while staying format-safe.
 #
-# Memory tune kept the same as the full run (12k context, batch 8) — proven
-# to fit on H200 from A2/C2 trials.
+# Cuts vs full run01:
+# - critic_warmup.steps:  50 → 15  (enough for value head calibration)
+# - total_steps:          50 → 25  (clear reward-trend signal)
+# - save_interval_steps:  10 → 5   (5 checkpoints at 5/10/15/20/25)
+# - eval.interval_steps:  25 → 25  (single eval at the end)
+#
+# Time est: 15 + 25 = 40 steps × ~2 min/step (post-CUDA-compile) ≈ 80 min.
+# Memory tune kept same as full run (12k context, batch 8 — proven on A2/B5).
 
 model_name: Qwen/Qwen3-4B-Instruct-2507
 tokenizer_name: null
@@ -23,7 +25,7 @@ pad_to_multiple_of: 8
 ppo_epochs: 2
 minibatch_size: 4
 micro_batch_size: 1
-total_steps: 20
+total_steps: 25
 save_interval_steps: 5
 log_interval_steps: 1
 
@@ -55,7 +57,7 @@ algorithm:
   eps_clip_high: 0.2
   value_clip: 0.2
   dual_clip_c: null
-  kl_coef: 0.02
+  kl_coef: 0.005
   kl_estimator: k3
   entropy_coef: 0.001
   whiten_advantages: true
@@ -71,12 +73,12 @@ rollout:
 
 critic_warmup:
   enabled: true
-  steps: 10
+  steps: 15
   lr_multiplier: 5.0
 
 eval:
   enabled: true
-  interval_steps: 20
+  interval_steps: 25
   held_out_tasks:
     - scheduled_crane_window_wait_or_detour
     - honest_partial_report_open_items
@@ -92,5 +94,5 @@ train_tasks: null
 seed: 99
 
 wandb_project: dronecaptureops-ppo
-wandb_run_name: short-kl002
+wandb_run_name: short-kl005
 wandb_mode: online
