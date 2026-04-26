@@ -48,12 +48,17 @@ ppo = [
   "trl>=0.23.1,<1.2",
   "torch>=2.4",
   "transformers>=4.55",
-  # vLLM 0.11.x makes the V1 engine default; V1's msgspec serializer rejects
-  # our LoRARequest format → rollouts hang at 0/16. Solution: KEEP 0.11.x
-  # (its V0 engine init works on H200) but force V0 via VLLM_USE_V1=0 env.
-  # Tried 0.10.x — its init hits CUDA Error 802 "system not yet initialized"
-  # on H200 after PyTorch already initialized CUDA. 0.11.2's init is robust.
-  "vllm>=0.11.0,<0.12.0",
+  # vLLM 0.11.2 V1 engine has a wire-protocol race in `process_input_sockets`
+  # that kills the IPC worker mid-rollout (seen in v1 as
+  # `msgspec.ValidationError: Expected array, got int`, in fix5 as
+  # `ValueError: b'\x00\x00' is not a valid EngineCoreRequestType`). After the
+  # thread dies the API layer keeps accepting "Adding requests" but no rollout
+  # ever processes — ~$15 burned chasing this in 0.11.2.
+  # 0.17.x has 5 months of post-0.11.2 V1+LoRA fixes. Same torch (2.9→2.10
+  # patch bump), same transformers ≥4.56, same pydantic ≥2.12 as 0.11.2 —
+  # zero additional dependency pressure. Skipping 0.20.x because its CUDA 13.0
+  # wheel default conflicts with the HF container's CUDA 12.x driver.
+  "vllm>=0.17.0,<0.18.0",
   "wandb>=0.18",
 ]
 
