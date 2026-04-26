@@ -786,12 +786,30 @@ class PPOTrainer:
             self.optimizer.step()
             t_total = time.perf_counter() - t_step
             mem_after_train = self._torch.cuda.memory_allocated() / 1e9 if self.device.type == "cuda" else 0.0
+            value_loss_val = float(loss.item())
             # Log EVERY step (no longer every 10) so we can see live progress
             # in HF logs even when the wandb dashboard is the only real-time view.
             LOG.info(
                 "critic warmup %d/%d: value_loss=%.4f roll=%.1fs total=%.1fs mem=%.1fGB n_traj=%d seq=%d",
-                w, warmup_steps, float(loss.item()), t_roll, t_total, mem_after_train, bsz, seq_len,
+                w, warmup_steps, value_loss_val, t_roll, t_total, mem_after_train, bsz, seq_len,
             )
+            # Push warmup metrics to wandb so the dashboard isn't blank for the
+            # entire warmup phase (which can be 50 steps × 3 min = 2.5h).
+            # Use NEGATIVE step indices so warmup curves don't collide with PPO
+            # step indices on the same wandb x-axis.
+            if self._wandb is not None:
+                self._wandb.log(
+                    {
+                        "warmup/value_loss": value_loss_val,
+                        "warmup/rollout_secs": float(t_roll),
+                        "warmup/total_secs": float(t_total),
+                        "warmup/mem_gb": float(mem_after_train),
+                        "warmup/n_traj": int(bsz),
+                        "warmup/seq_len": int(seq_len),
+                        "warmup/step": int(w),
+                    },
+                    step=-(warmup_steps - w + 1),  # negative = warmup, monotone-up
+                )
 
         # Unfreeze actor
         for name, p in self.model.named_parameters():
