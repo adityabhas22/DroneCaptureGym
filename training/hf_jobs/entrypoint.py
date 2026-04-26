@@ -25,11 +25,67 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
 WORK_ROOT = Path("/tmp/dronecaptureops_job")
 LOG = logging.getLogger("dronecaptureops.hf_jobs.entrypoint")
+
+
+def _wait_for_cuda_ready(*, attempts: int | None = None, sleep_secs: int | None = None) -> None:
+    """Bail fast on H200 nodes whose Fabric Manager is permanently stuck.
+
+    The probe runs `torch.cuda.init()` in a subprocess so a wedged driver
+    state doesn't poison the long-lived entrypoint. On HF Jobs H200 hosts
+    that hit huggingface_hub#4128, fabric manager never resolves and any
+    CUDA call returns Error 802 forever — bailing fast saves the ~$5 we
+    would otherwise burn on download + pip install before vLLM dies.
+    """
+
+    if attempts is None:
+        attempts = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_ATTEMPTS", "10"))
+    if sleep_secs is None:
+        sleep_secs = int(os.environ.get("DRONECAPTUREOPS_CUDA_PROBE_SLEEP", "20"))
+
+    probe = (
+        "import torch; torch.cuda.init(); n=torch.cuda.device_count(); "
+        "assert n > 0, 'no cuda devices'; "
+        "x=torch.empty(1, device='cuda'); "
+        "print({'cuda_devices': n, 'device': torch.cuda.get_device_name(0)})"
+    )
+    env = os.environ.copy()
+    for attempt in range(1, attempts + 1):
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            LOG.info("CUDA readiness probe passed: %s", result.stdout.strip())
+            return
+        LOG.warning(
+            "CUDA readiness probe failed (%d/%d): %s",
+            attempt, attempts, result.stderr.strip()[-300:],
+        )
+        if attempt % 3 == 0:
+            try:
+                smi = subprocess.run(
+                    ["nvidia-smi", "-q", "-d", "FABRIC"],
+                    text=True, capture_output=True, check=False, timeout=15,
+                )
+                LOG.warning("nvidia-smi fabric (attempt %d): %s", attempt, smi.stdout.strip()[:600])
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("nvidia-smi snapshot failed: %s", exc)
+        if attempt < attempts:
+            time.sleep(sleep_secs)
+    raise SystemExit(
+        "FATAL: CUDA fabric did not initialize in budget. This H200 node is "
+        "stuck on huggingface_hub#4128 (Fabric Manager permanently 'In Progress'). "
+        "Re-launch — different node assignment usually recovers."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +292,12 @@ def main() -> int:
 
     git_rev = os.environ.get("DRONECAPTUREOPS_GIT_REV", "unknown")
     LOG.info("starting %s job (rev=%s, model=%s)", args.job_type, git_rev, base_model)
+
+    # Bail fast on H200 nodes with stuck Fabric Manager (huggingface_hub#4128).
+    # Probe runs in subprocess so a wedged CUDA driver can't poison entrypoint.
+    # Exits with FATAL after ~3min on truly broken nodes — saves the ~$5 we'd
+    # otherwise burn on pip install + model download before vLLM dies at init.
+    _wait_for_cuda_ready()
 
     # If the bootstrap shell already downloaded and extracted the repo into
     # CWD, reuse it instead of downloading again. Detect by the presence of
