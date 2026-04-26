@@ -174,11 +174,19 @@ behavior rather than reward farming.
 - Repo contains a root `inference.py` that runs an episode end-to-end
   with any of `scripted`, `random`, `openai`, `anthropic`, `hf` policies
   using a shared `RolloutRunner`.
-- Hugging Face Space deployment: TODO_HF_SPACE_URL
-- Root `Dockerfile`: not yet in the repo root — will be added as part of
-  the submission package.
-- `openenv validate` status: TODO — will be re-run and recorded after the
-  Dockerfile and Space are in place.
+- Root `Dockerfile` is present and starts `uvicorn server.app:app` on
+  port 8000.
+- `scripts/validate-submission.sh` checks a deployed Space `/reset`,
+  builds the Docker image, and runs `openenv validate`.
+- Hugging Face Space deployment uses the OpenEnv CLI:
+
+```bash
+openenv push --repo-id <hf-username>/dronecaptureops-gym
+```
+
+The repo is packaged as a FastAPI OpenEnv Space rather than a notebook-only
+demo: the same server powers automated OpenEnv rollouts and the live browser
+inspection console.
 
 ---
 
@@ -208,13 +216,19 @@ python -m training.trace_episode --suite demo --episode-index 0 \
 
 ## Training Setup
 
-The training stack is TRL-based and runs on either local GPUs or HF Jobs:
+The training stack is intentionally separated from the core OpenEnv server,
+so judges can run the environment without heavyweight GPU dependencies.
+The optional `train` / `ppo` extras contain the model-training code.
 
-1. Generate SFT warm-start data from scripted/teacher rollouts.
-2. SFT-warm-start a small instruct model (Qwen3-4B-Instruct-2507 in our
-   reference run) into the tool-call format.
-3. Continue with PPO (TRL) on the live environment with KL anchoring to
-   the SFT adapter.
+The current pipeline has three layers:
+
+1. Generate SFT warm-start data from deterministic scripted/teacher
+   rollouts.
+2. SFT-warm-start `Qwen/Qwen3-4B-Instruct-2507` into the structured
+   DroneCaptureOps tool-call format.
+3. Continue with RL on the live environment. PPO configs and HF Jobs
+   launchers are present; `training/train_grpo.py` is a scaffold for a
+   future GRPO/RLVR path, not a claimed final submission model.
 
 Commands:
 
@@ -244,29 +258,33 @@ W&B tracking is wired into both SFT and PPO trainers.
 
 Real artifacts that exist in this repo today:
 
-- SFT warm-start dataset committed to artifacts: `artifacts/sft/sft-warmstart.jsonl`
-  (~60 MB, generated from scripted rollouts) and held-out split.
-- Two PPO sweep runs configured and launched on 2026-04-26 from the SFT
-  adapter (`adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint`,
-  eval_loss 0.300 at step 40 / epoch 0.74). Sweep dimension: `kl_coef`
-  at the informative extremes (0.02 vs. 0.005). See
-  `artifacts/ppo-runs-2026-04-26/README.md` for the full sweep design.
+- Smoke evaluation output: `artifacts/smoke-eval/summary.json`.
+- Traceable demonstration episode:
+  `artifacts/trace-demo/{trace.md,trace.json,evidence_log.json,route_log.json,
+  inspection_report.json,reward_evolution.json,safety_timeline.json}`.
+- PPO sweep configs and decision logs:
+  `artifacts/ppo-runs-2026-04-26/`.
+- TODO: add final training data / model metrics summary after the final run
+  outputs are available.
 
-What is **not** yet finalized for submission:
+Current benchmark evidence from `artifacts/smoke-eval/summary.json`:
 
-- TODO: final loss / reward plots from a completed PPO run.
-- TODO: end-to-end eval table comparing scripted, SFT-warm-start, and
-  PPO-finetuned policies on the three baseline tasks.
+| policy | episodes | success_rate | mean_reward | mean_steps |
+| --- | ---: | ---: | ---: | ---: |
+| `scripted` | 3 | 100% | 1.000 | 24.0 |
+| `task_oracle` | 3 | 100% | 1.000 | 20.3 |
+| `random` | 3 | 0% | 0.051 | 27.0 |
 
-Pending links to be filled in once a tracked run completes:
+This is exactly the behavior we want from the environment as a benchmark:
+a policy that follows the inspection contract can solve the smoke tasks,
+while random tool use fails despite sometimes producing valid-looking actions.
 
-- `TODO_EXPERIMENT_TRACKING_URL`
-- `TODO_LOSS_PLOT_URL`
-- `TODO_REWARD_PLOT_URL`
-- `TODO_TRAINED_MODEL_OR_ADAPTER_URL`
-
-No fabricated metrics are claimed here. Numbers will only appear after
-they exist in a real tracker run.
+The SFT and PPO artifacts should be read as training infrastructure and
+reproducibility evidence, not as a claim that a final RL policy already beats
+the scripted benchmark. We are deliberately not fabricating final model
+accuracy. The strongest completed evidence in this submission is the
+environment, verifier, reward design, deterministic task suite, and traceable
+baseline/evaluation stack.
 
 ---
 
@@ -282,34 +300,47 @@ python -m training.run_suite --suite smoke --policy scripted
 dronecaptureops-server                              # OpenEnv + live UI on :8000
 ```
 
-Containerized (after the root Dockerfile lands):
+Containerized:
 
 ```bash
 docker build -t dronecaptureops-gym .
 docker run --rm -p 8000:8000 dronecaptureops-gym
 ```
 
-Submission validator (after `scripts/validate-submission.sh` lands):
+Submission validator:
 
 ```bash
-./scripts/validate-submission.sh TODO_HF_SPACE_URL .
+./scripts/validate-submission.sh https://<hf-username>-dronecaptureops-gym.hf.space .
+```
+
+Hugging Face Space deployment:
+
+```bash
+openenv push --repo-id <hf-username>/dronecaptureops-gym
 ```
 
 Notebook for judges:
 
-- `training/colab_training_template.ipynb` — TODO, will be added as part
-  of the submission package.
-- `TODO_EXECUTED_TRAINING_NOTEBOOK_URL`
+- `training/colab_training_template.ipynb` shows the intended SFT/RL
+  training workflow and links back to the committed configs/artifacts.
 
 ---
 
 ## Demo / Video / Extra Materials
 
-- `TODO_WRITEUP_OR_VIDEO_URL`
-- `TODO_OPTIONAL_PRESENTATION_URL`
+TODO: add final demo video link after the metrics and presentation assets are
+ready.
 
-Large video files are not committed to this repo or any HF Space. Public
-URLs will be linked when available.
+The best in-repo demo material is the deterministic trace bundle:
+
+- `artifacts/trace-demo/trace.md` — readable step-by-step episode.
+- `artifacts/trace-demo/reward_evolution.json` — reward evolution.
+- `artifacts/trace-demo/evidence_log.json` — captured evidence.
+- `artifacts/trace-demo/inspection_report.json` — submitted report.
+- `/ui/` in the running server — browser console for live rollouts,
+  model runs, dataset replay, action logs, captures, and reward breakdowns.
+
+Large video files are intentionally not committed to the repo or Space.
 
 ---
 
@@ -336,11 +367,11 @@ URLs will be linked when available.
   is deferred until the reward and benchmark surface stabilize.
 - Bridge / construction / industrial domains exist as builders but are
   not yet populated with assets, tasks, or rewards.
-- Submission packaging artifacts (root `Dockerfile`, Space deployment,
-  `scripts/validate-submission.sh`, judge notebook) are still pending in
-  the repo as of this writing.
-- Final RL training plots are pending a completed tracked run; no
-  fabricated numbers are reported here.
+- The current judged environment is solar-inspection first; other domains
+  demonstrate the intended extension path.
+- `training/train_grpo.py` is only a GRPO/RLVR scaffold in this branch.
+- PPO/SFT infrastructure exists, but no final trained RL policy is claimed
+  as outperforming the scripted benchmark in this submission.
 
 ---
 
