@@ -68,11 +68,9 @@ def test_gpu_runtime_env_defaults_are_set_before_heavy_imports(monkeypatch):
 
     monkeypatch.delenv("PYTORCH_NVML_BASED_CUDA_CHECK", raising=False)
     monkeypatch.delenv("VLLM_WORKER_MULTIPROC_METHOD", raising=False)
-    monkeypatch.delenv("VLLM_USE_V1", raising=False)
     configure_gpu_runtime_env()
     assert __import__("os").environ["PYTORCH_NVML_BASED_CUDA_CHECK"] == "1"
     assert __import__("os").environ["VLLM_WORKER_MULTIPROC_METHOD"] == "spawn"
-    assert __import__("os").environ["VLLM_USE_V1"] == "0"
 
 
 def test_dry_run_held_out_tasks_excluded_from_train():

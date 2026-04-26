@@ -62,7 +62,6 @@ def _configure_gpu_runtime_env() -> None:
 
     os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
     os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
-    os.environ.setdefault("VLLM_USE_V1", "0")
 
 
 def _wait_for_cuda_ready(*, attempts: int | None = None, sleep_secs: int | None = None) -> None:

@@ -126,7 +126,6 @@ def build_job_spec(
         "PYTHONUNBUFFERED": "1",
         "PYTORCH_NVML_BASED_CUDA_CHECK": "1",
         "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
-        "VLLM_USE_V1": "0",
     }
     if extra_env:
         env.update(extra_env)

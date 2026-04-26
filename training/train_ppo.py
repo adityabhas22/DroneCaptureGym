@@ -48,9 +48,6 @@ def configure_gpu_runtime_env() -> None:
 
     os.environ.setdefault("PYTORCH_NVML_BASED_CUDA_CHECK", "1")
     os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
-    # PPO LoRA hot-swap currently relies on vLLM V0 behavior. V1 has had
-    # LoRARequest serialization/startup issues on the HF H200 image.
-    os.environ.setdefault("VLLM_USE_V1", "0")
 
 
 def load_config(path: Path | None) -> PPOTrainConfig:

@@ -1,0 +1,102 @@
+# PPO tiny learning run — L40S-tuned low-KL branch.
+#
+# Memory-tight variant of the 4B/H200 config so the run actually fits inside
+# 48 GB on L40S. Key reductions vs. the H200/A100 config:
+# - vllm_gpu_memory_utilization 0.35 -> 0.22  (saves ~6 GB for training)
+# - vllm_max_model_len 16384 -> 8192  (smaller KV cache)
+# - max_total_length 8192 -> 4096  (halves training activation memory)
+# - rollout.max_episode_steps 16 -> 8  (shorter trajectories)
+# - rollout.max_history_steps 8 -> 4  (smaller prompt context)
+# - rollout.rollout_batch_size 4 -> 2  (less peak memory)
+# - critic_warmup disabled  (was the OOM site on previous L40S run)
+# - vllm_enforce_eager true  (no CUDA graph capture memory)
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+allow_fresh_lora: false
+output_dir: artifacts/ppo-tiny-learning-4b-kl005-l40/checkpoints
+
+max_prompt_length: 2048
+max_total_length: 4096
+pad_to_multiple_of: 8
+
+ppo_epochs: 1
+minibatch_size: 1
+micro_batch_size: 1
+total_steps: 10
+save_interval_steps: 5
+log_interval_steps: 1
+
+vllm_gpu_memory_utilization: 0.22
+vllm_max_model_len: 8192
+vllm_dtype: bfloat16
+vllm_enforce_eager: true
+vllm_lora_dir: artifacts/ppo-tiny-learning-4b-kl005-l40/lora-cache
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 5.0e-6
+  critic_lr: 1.0e-5
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 0
+  scheduler: cosine
+
+algorithm:
+  gamma: 0.99
+  lam: 0.95
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  value_clip: 0.2
+  dual_clip_c: null
+  kl_coef: 0.005
+  kl_estimator: k3
+  entropy_coef: 0.001
+  whiten_advantages: true
+
+rollout:
+  rollout_batch_size: 2
+  max_workers: 2
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens_per_turn: 384
+  max_episode_steps: 8
+  max_history_steps: 4
+
+critic_warmup:
+  enabled: false
+  steps: 0
+  lr_multiplier: 5.0
+
+eval:
+  enabled: false
+  interval_steps: 5
+  held_out_tasks: []
+  seeds_per_task: 1
+  max_episode_steps: 8
+
+reporting:
+  enabled: true
+  rollouts_jsonl: rollouts/rollouts.jsonl
+  reports_dir: reports
+  traces_dir: traces
+  max_trace_samples_per_step: 2
+  include_messages: false
+
+train_tasks:
+  - basic_thermal_survey
+  - anomaly_confirmation
+  - pid_multi_row_pattern
+  - multi_anomaly_triage
+seed: 4242
+
+wandb_project: dronecaptureops-ppo
+wandb_run_name: tiny-learning-4b-kl005-l40
+wandb_mode: disabled

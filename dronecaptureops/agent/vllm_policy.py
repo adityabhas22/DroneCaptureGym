@@ -20,6 +20,7 @@ package without forcing every consumer to install vllm.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -105,6 +106,14 @@ class VLLMEngine:
             )
         self._llm = LLM(**llm_kwargs)
         self._tokenizer = self._llm.get_tokenizer()
+        # vLLM V1's LLM.generate() is NOT thread-safe — concurrent calls from
+        # multiple PPO rollout workers corrupt the engine-core ZMQ socket
+        # ("EngineCoreRequestType b'\\x00\\x00'"). vLLM upstream confirms V1
+        # requires AsyncLLM for concurrent use; until we migrate the rollout
+        # pool we serialize generate() with a process-wide lock. Continuous
+        # batching still works inside each call because the policy submits a
+        # batch of prompts when available.
+        self._generate_lock = threading.Lock()
 
     def render_prompt(self, messages: list[dict[str, Any]]) -> str:
         """Apply the model's chat template to a messages list."""
@@ -154,7 +163,8 @@ class VLLMEngine:
                     "rebuild with enable_lora=True to use LoRA adapters."
                 )
             kwargs["lora_request"] = lora_request
-        outputs = self._llm.generate(prompts, params, **kwargs)
+        with self._generate_lock:
+            outputs = self._llm.generate(prompts, params, **kwargs)
         return [output.outputs[0].text for output in outputs]
 
 

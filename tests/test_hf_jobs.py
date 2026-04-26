@@ -72,7 +72,6 @@ def test_build_job_spec_sft_defaults():
     assert spec.env["DRONECAPTUREOPS_BASE_MODEL"] == "Qwen/Qwen3-4B-Instruct-2507"
     assert spec.env["PYTORCH_NVML_BASED_CUDA_CHECK"] == "1"
     assert spec.env["VLLM_WORKER_MULTIPROC_METHOD"] == "spawn"
-    assert spec.env["VLLM_USE_V1"] == "0"
     # Labels for filtering jobs in the HF UI later.
     assert spec.labels["project"] == "dronecaptureops"
     assert spec.labels["job_type"] == "sft"
