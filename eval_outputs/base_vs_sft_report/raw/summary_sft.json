@@ -1,0 +1,77 @@
+{
+  "adapter_spec": "adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint",
+  "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+  "by_task": {
+    "edge_row_quality_bar": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 7,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "honest_partial_report_open_items": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "privacy_safe_alternate_evidence": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 20,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "return_margin_decision_point": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0325,
+      "mean_steps": 20,
+      "mean_total_reward": 0.0503,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "route_replan_when_primary_viewpoint_blocked": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.042499999999999996,
+      "mean_steps": 13.5,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "scheduled_crane_window_wait_or_detour": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0425,
+      "mean_steps": 20,
+      "mean_total_reward": 0.046,
+      "n": 2,
+      "success_rate": 0.0
+    },
+    "strict_severity_weighted_triage": {
+      "mean_parse_errors": 0,
+      "mean_process_reward": 0.0,
+      "mean_steps": 14,
+      "mean_total_reward": 0.0,
+      "n": 2,
+      "success_rate": 0.0
+    }
+  },
+  "elapsed_secs": 791.0755131244659,
+  "failure_modes": {
+    "no_capture": 0.7857142857142857,
+    "no_submit": 0.21428571428571427
+  },
+  "max_episode_steps": 20,
+  "mean_process_reward": 0.016785714285714286,
+  "mean_steps": 16.357142857142858,
+  "mean_terminal_reward": -0.0030285714285714295,
+  "mean_total_reward": 0.013757142857142857,
+  "n": 14,
+  "parse_error_rate": 0.0,
+  "seeds_per_task": 2,
+  "success_rate": 0.0,
+  "variant": "sft"
+}
