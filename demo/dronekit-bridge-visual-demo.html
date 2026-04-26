@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DroneCaptureOps DroneKit Bridge Visual Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(15, 23, 42, 0.86);
+      --panel-2: rgba(30, 41, 59, 0.92);
+      --text: #e5eefb;
+      --muted: #94a3b8;
+      --blue: #38bdf8;
+      --green: #34d399;
+      --orange: #fb923c;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --yellow: #fde68a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(56, 189, 248, 0.20), transparent 30%),
+        radial-gradient(circle at 70% 8%, rgba(167, 139, 250, 0.18), transparent 28%),
+        linear-gradient(135deg, #030712 0%, #07111f 45%, #0f172a 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 14px;
+      height: 100vh;
+      padding: 18px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      padding: 18px 22px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 24px;
+      background: rgba(15, 23, 42, 0.78);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(28px, 3vw, 46px);
+      letter-spacing: -0.04em;
+      line-height: 0.98;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 1px solid rgba(52, 211, 153, 0.5);
+      border-radius: 999px;
+      background: rgba(6, 78, 59, 0.34);
+      color: #bbf7d0;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 360px minmax(520px, 1fr) 390px;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .panel {
+      min-height: 0;
+      padding: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 20px 70px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #bfdbfe;
+    }
+
+    .feed {
+      display: grid;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .step-card {
+      position: relative;
+      padding: 13px 13px 13px 42px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.68);
+      opacity: 0.45;
+      transform: translateX(-6px);
+      transition: 300ms ease;
+    }
+
+    .step-card.active {
+      border-color: rgba(56, 189, 248, 0.85);
+      background: rgba(14, 116, 144, 0.20);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.22), 0 18px 40px rgba(56, 189, 248, 0.12);
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .step-num {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.16);
+      color: #bae6fd;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tool {
+      color: #f8fafc;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .thought {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .map-panel {
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .map-toolbar {
+      position: absolute;
+      z-index: 5;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .glass {
+      padding: 10px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.66);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    .current-action {
+      color: #e0f2fe;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .current-sub {
+      margin-top: 2px;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+
+    .score {
+      text-align: right;
+    }
+
+    .score strong {
+      display: block;
+      color: var(--green);
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .score span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+    }
+
+    .solar-row {
+      fill: rgba(30, 64, 175, 0.84);
+      stroke: rgba(147, 197, 253, 0.72);
+      stroke-width: 2;
+    }
+
+    .row-label {
+      fill: #dbeafe;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .zone {
+      fill: rgba(248, 113, 113, 0.20);
+      stroke: rgba(248, 113, 113, 0.88);
+      stroke-width: 3;
+      stroke-dasharray: 8 8;
+    }
+
+    .route-line {
+      fill: none;
+      stroke: rgba(56, 189, 248, 0.92);
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));
+    }
+
+    .route-line.completed {
+      stroke: rgba(52, 211, 153, 0.85);
+    }
+
+    .viewpoint {
+      fill: rgba(56, 189, 248, 0.16);
+      stroke: #38bdf8;
+      stroke-width: 2;
+    }
+
+    .capture-pulse {
+      fill: rgba(250, 204, 21, 0.26);
+      stroke: #fde047;
+      stroke-width: 3;
+      opacity: 0;
+    }
+
+    .capture-pulse.active {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.1; r: 18; }
+      50% { opacity: 0.85; r: 46; }
+      100% { opacity: 0.1; r: 18; }
+    }
+
+    #drone {
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 16px rgba(56, 189, 248, 0.65));
+      transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .drone-body {
+      fill: #e0f2fe;
+      stroke: #0284c7;
+      stroke-width: 2;
+    }
+
+    .rotor {
+      fill: rgba(56, 189, 248, 0.25);
+      stroke: #38bdf8;
+      stroke-width: 2;
+      animation: rotor 0.45s linear infinite;
+      transform-origin: center;
+    }
+
+    @keyframes rotor {
+      to { transform: rotate(360deg); }
+    }
+
+    .right-grid {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      padding: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.74);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 5px;
+      color: #f8fafc;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .command-box {
+      padding: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(14, 116, 144, 0.20), rgba(15, 23, 42, 0.78));
+    }
+
+    .command-title {
+      color: #bae6fd;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    pre {
+      margin: 10px 0 0;
+      white-space: pre-wrap;
+      color: #e2e8f0;
+      font-size: 13px;
+      line-height: 1.45;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .timeline {
+      display: grid;
+      align-content: start;
+      gap: 9px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.56);
+      color: var(--muted);
+      font-size: 12px;
+      opacity: 0.5;
+      transition: 250ms ease;
+    }
+
+    .timeline-row.active {
+      color: #f8fafc;
+      background: rgba(6, 78, 59, 0.36);
+      opacity: 1;
+    }
+
+    .time-chip {
+      color: #93c5fd;
+      font-weight: 900;
+    }
+
+    footer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border: 1px solid rgba(148, 163, 184, 0.20);
+      border-radius: 18px;
+      background: rgba(2, 6, 23, 0.70);
+      color: #cbd5e1;
+      font-size: 13px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #2563eb, #0891b2);
+      color: white;
+      font-weight: 900;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
+    }
+
+    .warning {
+      color: #fed7aa;
+    }
+
+    @media (max-width: 1200px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        height: auto;
+      }
+
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .map-panel {
+        height: 620px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>LLM Drone Inspection Director</h1>
+        <div class="subtitle">DroneCaptureOps trains the decision layer. This visual demo shows the same high-level actions mapped to DroneKit/SITL commands.</div>
+      </div>
+      <div class="badge">Simulation-safe bridge demo</div>
+    </header>
+
+    <main class="main">
+      <section class="panel">
+        <h2>LLM / OpenEnv Action Feed</h2>
+        <div class="feed" id="feed"></div>
+      </section>
+
+      <section class="panel map-panel">
+        <div class="map-toolbar">
+          <div class="glass">
+            <div class="current-action" id="currentAction">Preparing mission</div>
+            <div class="current-sub" id="currentSub">OpenEnv reset -> visible mission state only</div>
+          </div>
+          <div class="glass score">
+            <strong id="score">0.00</strong>
+            <span>grounded reward</span>
+          </div>
+        </div>
+
+        <svg id="map" viewBox="0 0 1000 700" role="img" aria-label="Animated solar inspection drone route">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(148,163,184,0.10)" stroke-width="1" />
+            </pattern>
+            <linearGradient id="field" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#0f3f2e" />
+              <stop offset="1" stop-color="#11213f" />
+            </linearGradient>
+          </defs>
+
+          <rect width="1000" height="700" fill="url(#field)" />
+          <rect width="1000" height="700" fill="url(#grid)" />
+
+          <text x="44" y="632" fill="#94a3b8" font-size="14">Site: inverter block B, rows B4-B8</text>
+          <text x="44" y="655" fill="#94a3b8" font-size="14">Goal: gather thermal coverage, confirm anomalies, return home, submit grounded report</text>
+
+          <rect class="zone" x="710" y="110" width="180" height="210" rx="18" />
+          <text x="735" y="205" fill="#fecaca" font-size="18" font-weight="800">SUBSTATION</text>
+          <text x="744" y="230" fill="#fecaca" font-size="14">NO-FLY ZONE</text>
+
+          <g id="solarRows">
+            <rect class="solar-row" x="315" y="160" width="250" height="42" rx="8" />
+            <text class="row-label" x="210" y="187">B4</text>
+            <rect class="solar-row" x="315" y="225" width="250" height="42" rx="8" />
+            <text class="row-label" x="210" y="252">B5</text>
+            <rect class="solar-row" x="315" y="290" width="250" height="42" rx="8" />
+            <text class="row-label" x="210" y="317">B6 hotspot</text>
+            <rect class="solar-row" x="315" y="355" width="250" height="42" rx="8" />
+            <text class="row-label" x="210" y="382">B7</text>
+            <rect class="solar-row" x="315" y="420" width="250" height="42" rx="8" />
+            <text class="row-label" x="210" y="447">B8</text>
+          </g>
+
+          <circle class="viewpoint" cx="150" cy="520" r="16" />
+          <text x="118" y="554" fill="#bfdbfe" font-size="14" font-weight="800">HOME</text>
+          <circle class="viewpoint" cx="260" cy="310" r="14" />
+          <text x="222" y="292" fill="#bfdbfe" font-size="13">thermal overview</text>
+          <circle class="viewpoint" cx="640" cy="310" r="14" />
+          <text x="604" y="292" fill="#bfdbfe" font-size="13">RGB close-up</text>
+          <circle class="viewpoint" cx="195" cy="230" r="14" />
+          <text x="150" y="212" fill="#bfdbfe" font-size="13">reframe</text>
+
+          <path id="trailDone" class="route-line completed" d="" />
+          <path id="trailFuture" class="route-line" opacity="0.28" d="M150,520 L260,310 L195,230 L640,310 L150,520" />
+          <circle id="capturePulse" class="capture-pulse" cx="260" cy="310" r="26" />
+
+          <g id="drone" transform="translate(150 520)">
+            <line x1="-24" y1="-24" x2="24" y2="24" stroke="#dbeafe" stroke-width="5" stroke-linecap="round" />
+            <line x1="-24" y1="24" x2="24" y2="-24" stroke="#dbeafe" stroke-width="5" stroke-linecap="round" />
+            <circle class="rotor" cx="-32" cy="-32" r="13" />
+            <circle class="rotor" cx="32" cy="-32" r="13" />
+            <circle class="rotor" cx="-32" cy="32" r="13" />
+            <circle class="rotor" cx="32" cy="32" r="13" />
+            <rect class="drone-body" x="-17" y="-13" width="34" height="26" rx="8" />
+            <circle cx="0" cy="0" r="4" fill="#0ea5e9" />
+          </g>
+        </svg>
+      </section>
+
+      <section class="panel right-grid">
+        <div>
+          <h2>Mission Telemetry</h2>
+          <div class="metric-grid">
+            <div class="metric">
+              <div class="metric-label">Mode</div>
+              <div class="metric-value" id="mode">INIT</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Battery</div>
+              <div class="metric-value" id="battery">100%</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Evidence</div>
+              <div class="metric-value" id="evidence">0/5</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Integrity</div>
+              <div class="metric-value" id="integrity">OK</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="command-box">
+          <div class="command-title">DroneKit/SITL Command Mapping</div>
+          <pre id="command">OpenEnv reset(task="anomaly_confirmation")</pre>
+        </div>
+
+        <div class="timeline">
+          <h2>Video Story Beats</h2>
+          <div id="timeline"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div>
+        <strong>Honest demo boundary:</strong>
+        <span class="warning">the submitted environment trains/evaluates in GeometryController; this visual shows how the same high-level command layer maps to DroneKit/SITL for a video demo.</span>
+      </div>
+      <button id="restart">Restart animation</button>
+    </footer>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        tool: "reset(task='anomaly_confirmation')",
+        thought: "Start a deterministic solar inspection mission with hidden verifier state.",
+        xy: [150, 520],
+        mode: "READY",
+        battery: "100%",
+        evidence: "0/5",
+        score: "0.00",
+        command: "OpenEnv reset -> DroneObservation\nDroneKit: connect('tcp:127.0.0.1:5760')",
+        action: "Mission initialized",
+        sub: "Only public telemetry, map, checklist, tools, and capture metadata are visible.",
+        capture: false,
+      },
+      {
+        tool: "get_mission_checklist + get_site_map",
+        thought: "The agent learns it must cover rows B4-B8, avoid the substation, and return home.",
+        xy: [150, 520],
+        mode: "PLANNING",
+        battery: "100%",
+        evidence: "0/5",
+        score: "0.02",
+        command: "OpenEnv tools -> checklist + site map\nDroneKit: no movement yet",
+        action: "Plan safe inspection route",
+        sub: "Mission/map tools help the LLM decide where evidence is missing.",
+        capture: false,
+      },
+      {
+        tool: "takeoff(altitude_m=18)",
+        thought: "High-level OpenEnv tool maps to a DroneKit guided takeoff.",
+        xy: [180, 470],
+        mode: "GUIDED",
+        battery: "96%",
+        evidence: "0/5",
+        score: "0.06",
+        command: "vehicle.mode = VehicleMode('GUIDED')\nvehicle.armed = True\nvehicle.simple_takeoff(18)",
+        action: "Take off to inspection altitude",
+        sub: "The LLM chooses mission action; DroneKit handles autopilot movement.",
+        capture: false,
+      },
+      {
+        tool: "fly_to_viewpoint(thermal_overview)",
+        thought: "Move to a safe standoff viewpoint without entering the no-fly zone.",
+        xy: [260, 310],
+        mode: "GUIDED",
+        battery: "91%",
+        evidence: "0/5",
+        score: "0.12",
+        command: "vehicle.simple_goto(LocationGlobalRelative(...), groundspeed=5)",
+        action: "Fly to thermal overview viewpoint",
+        sub: "Route stays clear of the substation no-fly zone.",
+        capture: false,
+      },
+      {
+        tool: "capture_thermal(rows B4-B8)",
+        thought: "Collect thermal evidence across every required row.",
+        xy: [260, 310],
+        mode: "HOVER",
+        battery: "88%",
+        evidence: "5/5",
+        score: "0.48",
+        command: "OpenEnv capture_thermal -> simulator quality model\nDroneKit bridge: hold position / payload trigger placeholder",
+        action: "Capture thermal overview",
+        sub: "Camera quality and row coverage become visible capture metadata.",
+        capture: true,
+      },
+      {
+        tool: "inspect_capture(photo_id)",
+        thought: "The agent checks quality before trusting the evidence.",
+        xy: [195, 230],
+        mode: "REFRAME",
+        battery: "84%",
+        evidence: "5/5",
+        score: "0.56",
+        command: "OpenEnv inspect_capture(photo_id)\nIf quality low: simple_goto(reframe_viewpoint)",
+        action: "Inspect quality and reframe if needed",
+        sub: "Dense reward teaches recapture loops instead of blind reporting.",
+        capture: true,
+      },
+      {
+        tool: "fly_to_viewpoint(row_B6_rgb_closeup)",
+        thought: "A hidden thermal anomaly on B6 needs RGB context.",
+        xy: [640, 310],
+        mode: "GUIDED",
+        battery: "78%",
+        evidence: "5/5 + anomaly",
+        score: "0.68",
+        command: "vehicle.simple_goto(row_B6_closeup, groundspeed=4)",
+        action: "Move for anomaly confirmation",
+        sub: "The agent gathers missing evidence instead of hallucinating a report.",
+        capture: false,
+      },
+      {
+        tool: "capture_rgb(row_B6) + inspect_capture",
+        thought: "Pair the detected anomaly with target-specific RGB evidence.",
+        xy: [640, 310],
+        mode: "HOVER",
+        battery: "74%",
+        evidence: "RGB linked",
+        score: "0.79",
+        command: "OpenEnv capture_rgb -> photo_id\nDroneKit bridge: payload trigger placeholder",
+        action: "Capture RGB confirmation",
+        sub: "The final report must cite real photo IDs from the capture log.",
+        capture: true,
+      },
+      {
+        tool: "return_home()",
+        thought: "Finish safely before battery reserve becomes a problem.",
+        xy: [150, 520],
+        mode: "RTL",
+        battery: "66%",
+        evidence: "complete",
+        score: "0.88",
+        command: "vehicle.mode = VehicleMode('RTL')",
+        action: "Return home",
+        sub: "Safety gate rewards return margin and caps unsafe behavior.",
+        capture: false,
+      },
+      {
+        tool: "land() + submit_evidence_pack(photo_ids)",
+        thought: "Submit only grounded claims tied to captured evidence.",
+        xy: [150, 520],
+        mode: "LANDED",
+        battery: "62%",
+        evidence: "submitted",
+        score: "1.00",
+        command: "vehicle.mode = VehicleMode('LAND')\nsubmit_evidence_pack(real_photo_ids)",
+        action: "Submit grounded final report",
+        sub: "Integrity gate caps fake photo IDs or unsupported issue claims.",
+        capture: false,
+      },
+    ];
+
+    const feed = document.getElementById("feed");
+    const timeline = document.getElementById("timeline");
+    const drone = document.getElementById("drone");
+    const trailDone = document.getElementById("trailDone");
+    const pulse = document.getElementById("capturePulse");
+    const currentAction = document.getElementById("currentAction");
+    const currentSub = document.getElementById("currentSub");
+    const score = document.getElementById("score");
+    const mode = document.getElementById("mode");
+    const battery = document.getElementById("battery");
+    const evidence = document.getElementById("evidence");
+    const integrity = document.getElementById("integrity");
+    const command = document.getElementById("command");
+    const restart = document.getElementById("restart");
+
+    steps.forEach((step, index) => {
+      const card = document.createElement("div");
+      card.className = "step-card";
+      card.innerHTML = `
+        <div class="step-num">${index + 1}</div>
+        <div class="tool">${step.tool}</div>
+        <div class="thought">${step.thought}</div>
+      `;
+      feed.appendChild(card);
+
+      const row = document.createElement("div");
+      row.className = "timeline-row";
+      row.innerHTML = `<div class="time-chip">${String(index * 7).padStart(2, "0")}s</div><div>${step.action}</div>`;
+      timeline.appendChild(row);
+    });
+
+    const cards = Array.from(document.querySelectorAll(".step-card"));
+    const rows = Array.from(document.querySelectorAll(".timeline-row"));
+    let timer = null;
+    let idx = 0;
+
+    function pathUntil(index) {
+      const unique = [];
+      steps.slice(0, index + 1).forEach((step) => {
+        const last = unique[unique.length - 1];
+        if (!last || last[0] !== step.xy[0] || last[1] !== step.xy[1]) {
+          unique.push(step.xy);
+        }
+      });
+      return unique.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
+    }
+
+    function show(index) {
+      const step = steps[index];
+      cards.forEach((card, i) => card.classList.toggle("active", i === index));
+      rows.forEach((row, i) => row.classList.toggle("active", i === index));
+
+      drone.style.transform = `translate(${step.xy[0]}px, ${step.xy[1]}px)`;
+      trailDone.setAttribute("d", pathUntil(index));
+      pulse.setAttribute("cx", step.xy[0]);
+      pulse.setAttribute("cy", step.xy[1]);
+      pulse.classList.toggle("active", step.capture);
+
+      currentAction.textContent = step.action;
+      currentSub.textContent = step.sub;
+      score.textContent = step.score;
+      mode.textContent = step.mode;
+      battery.textContent = step.battery;
+      evidence.textContent = step.evidence;
+      integrity.textContent = index === steps.length - 1 ? "GATED OK" : "OK";
+      command.textContent = step.command;
+    }
+
+    function start() {
+      clearInterval(timer);
+      idx = 0;
+      show(idx);
+      timer = setInterval(() => {
+        idx = (idx + 1) % steps.length;
+        show(idx);
+      }, 3600);
+    }
+
+    restart.addEventListener("click", start);
+    start();
+  </script>
+</body>
+</html>
