@@ -205,6 +205,32 @@ def _run_sft_trainer(*, repo_dir: Path, base_model: str, config_path: str, datas
     subprocess.check_call(cmd, cwd=str(repo_dir))
 
 
+def _run_eval_adapter(*, repo_dir: Path, base_model: str, output_dir: Path) -> None:
+    """Run the held-out PPO adapter eval (training/eval_ppo_adapter.py).
+
+    Reads the adapter spec from `DRONECAPTUREOPS_ADAPTER` env var (e.g.
+    `user/repo:output/step_10/adapter`). Produces rollouts.jsonl + summary.json
+    in `output_dir`, which the entrypoint will push to the HF Hub output repo.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    adapter = os.environ.get("DRONECAPTUREOPS_ADAPTER")
+    variant = os.environ.get("DRONECAPTUREOPS_EVAL_VARIANT", "ppo")
+    if not adapter:
+        raise SystemExit("eval job requires DRONECAPTUREOPS_ADAPTER env var")
+    cmd = [
+        sys.executable,
+        "-m",
+        "training.eval_ppo_adapter",
+        "--base-model", base_model,
+        "--adapter", adapter,
+        "--variant", variant,
+        "--output-dir", str(output_dir),
+    ]
+    LOG.info("running PPO adapter eval: %s", " ".join(cmd))
+    subprocess.check_call(cmd, cwd=str(repo_dir))
+
+
 def _run_ppo_trainer(*, repo_dir: Path, base_model: str, config_path: str, output_dir: Path) -> None:
     """Run training.train_ppo with the in-job paths and base model.
 
@@ -284,7 +310,7 @@ def _push_outputs(token: str, output_repo_id: str, artifact_dirs: list[Path]) ->
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     parser = argparse.ArgumentParser(description="In-job entrypoint for DroneCaptureOps training on HF Jobs.")
-    parser.add_argument("job_type", choices=["sft", "ppo"])
+    parser.add_argument("job_type", choices=["sft", "ppo", "eval"])
     args, extra = parser.parse_known_args()
 
     token = _hf_token()
@@ -336,6 +362,8 @@ def main() -> int:
             output_dir=output_dir,
             output_repo=output_repo,
         )
+    elif args.job_type == "eval":
+        _run_eval_adapter(repo_dir=repo_dir, base_model=base_model, output_dir=output_dir)
     else:
         _run_ppo_trainer(
             repo_dir=repo_dir,

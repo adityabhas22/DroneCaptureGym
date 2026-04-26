@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-JobType = Literal["sft", "ppo"]
+JobType = Literal["sft", "ppo", "eval"]
 
 
 # Default container — already has cuda + torch + transformers.
@@ -46,12 +46,13 @@ DEFAULT_IMAGE = "huggingface/transformers-pytorch-gpu:latest"
 #     --hardware a100-large    # 1× A100, 80 GB, $2.50/hr
 DEFAULT_HARDWARE_BY_JOB: dict[JobType, str] = {
     "sft": "l40sx1",    # 4B SFT (LoRA): ~25-35 min, ~$0.90 wall cost
-    "ppo": "h200",      # 4B PPO: 1× H200 (141 GB) — vLLM colocate + LoRA
-                        # training fits comfortably; ~7-10 h, ~$35-50/lap.
+    "ppo": "h200",      # 4B PPO: 1× H200 (141 GB) — HFLocalEngine colocate
+    "eval": "h200",     # 4B eval: 14 rollouts × ~30s = ~7 min on H200
 }
 DEFAULT_TIMEOUT_BY_JOB: dict[JobType, str] = {
-    "sft": "2h",        # 4B SFT lands in <40 min; 2h headroom
-    "ppo": "12h",       # 4B PPO at 100-150 steps lands in 7-10 h; 12h headroom
+    "sft": "2h",
+    "ppo": "12h",
+    "eval": "1h",       # 14 rollouts of max 20 steps each — well under 1h
 }
 
 
@@ -110,7 +111,7 @@ def build_job_spec(
         config the trainer reads.
     """
 
-    if job_type not in ("sft", "ppo"):
+    if job_type not in ("sft", "ppo", "eval"):
         raise ValueError(f"unsupported job_type: {job_type!r}")
 
     flavor = hardware or DEFAULT_HARDWARE_BY_JOB[job_type]
