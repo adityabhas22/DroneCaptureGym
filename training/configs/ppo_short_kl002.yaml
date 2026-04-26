@@ -1,0 +1,96 @@
+# PPO SHORT — kl=0.02, designed to finish in ~90 min as insurance.
+#
+# Cuts vs ppo_run01_kl002.yaml:
+# - critic_warmup.steps:  50 → 10  (value head won't fully converge but
+#   still much better than zero-init; first 5-10 steps capture most gain)
+# - total_steps:          50 → 20  (gets us a real-trained adapter, just less
+#   optimized than the full sweep)
+# - save_interval_steps:  10 → 5   (4 checkpoints during training)
+# - eval.interval_steps:  25 → 20  (single mid/end eval)
+#
+# Memory tune kept the same as the full run (12k context, batch 8) — proven
+# to fit on H200 from A2/C2 trials.
+
+model_name: Qwen/Qwen3-4B-Instruct-2507
+tokenizer_name: null
+sft_checkpoint: adityabhaskara/dronecaptureops-sft-qwen3-4b:last-checkpoint
+output_dir: artifacts/ppo-checkpoints
+
+max_prompt_length: 4096
+max_total_length: 12288
+pad_to_multiple_of: 8
+
+ppo_epochs: 2
+minibatch_size: 4
+micro_batch_size: 1
+total_steps: 20
+save_interval_steps: 5
+log_interval_steps: 1
+
+vllm_gpu_memory_utilization: 0.4    # legacy field — HFLocalEngine ignores
+vllm_max_model_len: 12288           # legacy field
+vllm_dtype: bfloat16
+vllm_enforce_eager: false
+vllm_lora_dir: artifacts/ppo-lora-cache
+
+lora:
+  rank: 64
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+optimizer:
+  actor_lr: 1.0e-5
+  critic_lr: 1.0e-5
+  weight_decay: 0.0
+  betas: [0.9, 0.95]
+  max_grad_norm: 1.0
+  warmup_steps: 5
+  scheduler: cosine
+
+algorithm:
+  gamma: 0.99
+  lam: 0.95
+  eps_clip_low: 0.2
+  eps_clip_high: 0.2
+  value_clip: 0.2
+  dual_clip_c: null
+  kl_coef: 0.02
+  kl_estimator: k3
+  entropy_coef: 0.001
+  whiten_advantages: true
+
+rollout:
+  rollout_batch_size: 8
+  max_workers: 8
+  temperature: 0.7
+  top_p: 1.0
+  max_new_tokens_per_turn: 512
+  max_episode_steps: 20
+  max_history_steps: 12
+
+critic_warmup:
+  enabled: true
+  steps: 10
+  lr_multiplier: 5.0
+
+eval:
+  enabled: true
+  interval_steps: 20
+  held_out_tasks:
+    - scheduled_crane_window_wait_or_detour
+    - honest_partial_report_open_items
+    - strict_severity_weighted_triage
+    - edge_row_quality_bar
+    - privacy_safe_alternate_evidence
+    - return_margin_decision_point
+    - route_replan_when_primary_viewpoint_blocked
+  seeds_per_task: 1
+  max_episode_steps: 20
+
+train_tasks: null
+seed: 99
+
+wandb_project: dronecaptureops-ppo
+wandb_run_name: short-kl002
+wandb_mode: online
