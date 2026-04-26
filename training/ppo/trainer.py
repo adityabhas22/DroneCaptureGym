@@ -32,7 +32,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from dronecaptureops.agent.vllm_policy import VLLMEngine
+from dronecaptureops.agent.hf_local_engine import HFLocalEngine
 from dronecaptureops.tasks.solar_tasks import SOLAR_TASKS
 from training.ppo.config import (
     AlgorithmConfig,
@@ -256,8 +256,9 @@ class PPOTrainer:
             weight_decay=config.optimizer.weight_decay,
         )
 
-        # vLLM engine — initialized lazily so unit tests don't pay the boot cost.
-        self._engine: VLLMEngine | None = None
+        # In-process HF rollout engine (replaces vLLM — see hf_local_engine.py
+        # for the why). Initialized lazily so unit tests don't pay boot cost.
+        self._engine: HFLocalEngine | None = None
         self._lora_request_step: int = 0
         self._sft_lora_path: Path | None = None
 
@@ -278,43 +279,43 @@ class PPOTrainer:
                 LOG.warning("wandb not installed; logging to JSONL only")
                 self._wandb = None
 
-    # ---------- vLLM lifecycle ----------
+    # ---------- Rollout engine lifecycle ----------
 
-    def _ensure_engine(self) -> VLLMEngine:
+    def _ensure_engine(self) -> HFLocalEngine:
+        """Lazily wrap our trainable model in the HFLocalEngine batcher.
+
+        We pass the live PEFT-wrapped policy (`self.model.policy`), so the
+        engine sees the current LoRA weights for free — no save/reload, no
+        IPC, no separate vLLM process.
+        """
+
         if self._engine is None:
-            LOG.info("starting vLLM engine (gpu_mem=%.2f, len=%d)", self.cfg.vllm_gpu_memory_utilization, self.cfg.vllm_max_model_len)
-            self._engine = VLLMEngine(
-                model=self.cfg.model_name,
-                max_model_len=self.cfg.vllm_max_model_len,
-                dtype=self.cfg.vllm_dtype,
-                gpu_memory_utilization=self.cfg.vllm_gpu_memory_utilization,
-                enforce_eager=self.cfg.vllm_enforce_eager,
-                tensor_parallel_size=1,
-                enable_lora=True,
-                max_lora_rank=self.cfg.lora.rank,
-                max_loras=1,
+            LOG.info(
+                "starting HFLocalEngine (max_batch=%d, max_workers=%d)",
+                self.cfg.rollout.rollout_batch_size,
+                self.cfg.rollout.max_workers,
+            )
+            self._engine = HFLocalEngine(
+                model=self.model.policy,
+                tokenizer=self.tokenizer,
+                device=self.device,
+                max_batch_size=self.cfg.rollout.rollout_batch_size,
+                max_history_steps=self.cfg.rollout.max_history_steps,
+                enable_thinking=False,
             )
         return self._engine
 
-    def _save_lora_for_vllm(self, step_id: int) -> str:
-        """Save current LoRA adapter to a fresh path so vLLM can load it.
-
-        vLLM caches adapters by `lora_int_id`; using a new id each step
-        guarantees vLLM picks up the new weights instead of reusing a
-        stale cached copy.
-        """
-        adapter_dir = self.lora_cache / f"step_{step_id}"
-        adapter_dir.mkdir(parents=True, exist_ok=True)
-        # PeftModel exposes save_pretrained for adapter-only saves.
-        self.model.policy.save_pretrained(str(adapter_dir))
-        return str(adapter_dir)
-
     def _build_lora_request(self, step_id: int):
-        from vllm.lora.request import LoRARequest
+        """No-op stub kept for call-site compatibility.
 
-        path = self._save_lora_for_vllm(step_id)
-        # Use a fresh integer id each step so vLLM doesn't cache a stale adapter.
-        return LoRARequest(f"policy_step_{step_id}", step_id + 1, path)
+        The legacy vLLM path needed a per-step LoRARequest so vLLM could
+        hot-swap to the freshly-saved adapter. With HFLocalEngine we use
+        the trainer's live model directly, so there's nothing to swap.
+        Returns None so any downstream code that passes this through
+        gets the "no adapter override" sentinel.
+        """
+
+        return None
 
     # ---------- Task sampling ----------
 

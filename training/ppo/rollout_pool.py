@@ -1,9 +1,9 @@
 """Concurrent rollout pool for PPO training.
 
 Runs N rollouts of the existing `RolloutRunner` in parallel threads,
-sharing a single `VLLMEngine`. Each thread holds its own
+sharing a single `HFLocalEngine`. Each thread holds its own
 `DroneCaptureOpsEnvironment` (deterministic per seed) and a
-`VLLMPolicy` instance — these aren't thread-safe across rollouts but
+`HFLocalPolicy` instance — these aren't thread-safe across rollouts but
 each thread owns its own copy.
 
 vLLM's `generate()` releases the GIL while the actual inference runs
@@ -13,7 +13,7 @@ needing a multi-process server.
 
 Outputs are PPO-ready: each rollout returns the trajectory rewards
 (`RolloutResult`) plus the raw chat messages the policy actually
-emitted (`VLLMPolicy.messages`). The trainer feeds the messages into
+emitted (`HFLocalPolicy.messages`). The trainer feeds the messages into
 `tokenize_trajectory` and the rewards into `build_per_token_rewards`.
 """
 
@@ -24,8 +24,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any
 
+from dronecaptureops.agent.hf_local_engine import HFLocalEngine, HFLocalPolicy
 from dronecaptureops.agent.rollout import RolloutResult, RolloutRunner
-from dronecaptureops.agent.vllm_policy import VLLMEngine, VLLMPolicy
 from dronecaptureops.core.environment import DroneCaptureOpsEnvironment
 
 
@@ -53,7 +53,7 @@ class PPORolloutOutput:
 def _run_one(
     spec: PPORolloutSpec,
     *,
-    engine: VLLMEngine,
+    engine: HFLocalEngine,
     lora_request: Any | None,
     temperature: float,
     top_p: float,
@@ -68,9 +68,9 @@ def _run_one(
 
     # `env.reset()` is called inside `runner.run()`; we must construct
     # the policy AFTER reset so the registry/world it captures match.
-    # `RolloutRunner.run()` resets first — VLLMPolicy lazily fetches
+    # `RolloutRunner.run()` resets first — HFLocalPolicy lazily fetches
     # registry/world on first `next_action`, which fires after reset.
-    policy = VLLMPolicy(
+    policy = HFLocalPolicy(
         engine=engine,
         env=env,
         task_id=spec.task_id,
@@ -97,7 +97,7 @@ def _run_one(
 def run_rollout_batch(
     specs: list[PPORolloutSpec],
     *,
-    engine: VLLMEngine,
+    engine: HFLocalEngine,
     lora_request: Any | None,
     max_workers: int = 16,
     temperature: float = 0.7,
