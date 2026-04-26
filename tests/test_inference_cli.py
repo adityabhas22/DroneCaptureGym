@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -25,20 +24,21 @@ def _run(*args: str) -> tuple[int, str, str]:
 def test_inference_cli_scripted_basic_thermal_survey():
     rc, stdout, stderr = _run("--task", "basic_thermal_survey", "--policy", "scripted")
     assert rc == 0, stderr
-    summary = json.loads(stdout)
-    assert summary["task_id"] == "basic_thermal_survey"
-    assert summary["policy"] == "scripted"
-    assert summary["success"] is True
-    assert summary["complete"] is True
-    assert summary["total_reward"] >= 0.95
+    lines = stdout.splitlines()
+    assert lines[0] == "[START] task=basic_thermal_survey env=dronecaptureops-gym model=scripted"
+    assert any(line.startswith("[STEP] step=1 action=") for line in lines)
+    assert lines[-1].startswith("[END] success=true ")
+    assert "score=1.00" in lines[-1]
 
 
 def test_inference_cli_random_runs_without_crash():
     rc, stdout, _ = _run("--task", "anomaly_confirmation", "--policy", "random", "--max-steps", "4", "--seed", "11")
     assert rc == 0
-    summary = json.loads(stdout)
-    assert summary["policy"] == "random"
-    assert summary["steps"] <= 4
+    lines = stdout.splitlines()
+    assert lines[0] == "[START] task=anomaly_confirmation env=dronecaptureops-gym model=random"
+    step_lines = [line for line in lines if line.startswith("[STEP]")]
+    assert 1 <= len(step_lines) <= 4
+    assert lines[-1].startswith("[END] ")
 
 
 def test_inference_cli_writes_trajectory_and_messages_to_disk(tmp_path):
@@ -58,9 +58,12 @@ def test_inference_cli_writes_trajectory_and_messages_to_disk(tmp_path):
     assert trace_path.exists()
     assert messages_path.exists()
 
+    import json
+
     record = json.loads(messages_path.read_text())
-    assert record["task_id"] == "anomaly_confirmation"
-    messages = record["messages"]
+    run = record["runs"][0]
+    assert run["task_id"] == "anomaly_confirmation"
+    messages = run["messages"]
     assert messages[0]["role"] == "system"
     assert messages[1]["role"] == "user"
     assert any(message["role"] == "assistant" for message in messages)

@@ -13,6 +13,7 @@ dependencies = [
   "pyyaml>=6.0",
   "fastapi>=0.110",
   "uvicorn>=0.30",
+  "openai>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -23,7 +24,9 @@ dev = [
 train = [
   "accelerate>=1.10",
   "datasets>=4.0",
+  "matplotlib>=3.8",
   "peft>=0.17",
+  "tensorboard>=2.16",
   "trl>=0.23.1",
 ]
 

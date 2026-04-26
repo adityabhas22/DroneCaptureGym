@@ -337,6 +337,11 @@ def train(config: SFTTrainConfig) -> None:
     trainer.train()
     trainer.save_model(str(output_dir / "final"))
     tokenizer.save_pretrained(str(output_dir / "final"))
+    metrics_dir = output_dir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    (metrics_dir / "trainer_log_history.json").write_text(
+        json.dumps(trainer.state.log_history, indent=2, sort_keys=True)
+    )
     LOG.info("training complete; final model written to %s", output_dir / "final")
 
 

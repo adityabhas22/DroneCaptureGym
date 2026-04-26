@@ -89,5 +89,8 @@ response_template: "<|im_start|>assistant\n"
 
 # Logging
 logging_steps: 5
-report_to: []
+# TensorBoard creates local, judge-shareable tracking artifacts under
+# output_dir/runs/. Switch to ["wandb"] only when WANDB_API_KEY is configured.
+report_to:
+  - tensorboard
 seed: 42
