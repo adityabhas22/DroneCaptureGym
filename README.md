@@ -73,7 +73,7 @@ Final public links will be added before submission:
 - Short writeup, mini-blog, or under-2-minute video: `TODO_WRITEUP_OR_VIDEO_URL`
 - Optional slides/demo page: `TODO_OPTIONAL_PRESENTATION_URL`
 
-The video/storyboard draft lives in [docs/submission-video-script.md](docs/submission-video-script.md). The submission blog post lives at [BLOG.md](BLOG.md) and is the source for the form's "Blog Post" field once this repo is pushed to a Hugging Face Space. Final plots and claims must come from a real run, not placeholders.
+The video/storyboard draft lives in [docs/submission-video-script.md](docs/submission-video-script.md). The visual system flow lives in [docs/submission-system-flow.md](docs/submission-system-flow.md), with a shareable Mermaid source at [docs/submission-hero-flow.mmd](docs/submission-hero-flow.mmd) and sharing instructions in [docs/submission-visualization-share.md](docs/submission-visualization-share.md). The submission blog post lives at [BLOG.md](BLOG.md) and is the source for the form's "Blog Post" field once this repo is pushed to a Hugging Face Space. Final plots and claims must come from a real run, not placeholders.
 
 ## What Exists Now
 

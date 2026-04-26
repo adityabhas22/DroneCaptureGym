@@ -229,6 +229,8 @@ If you are training models, ablation-testing reward shaping, or looking for a no
 - Demo video (optional): `TODO_WRITEUP_OR_VIDEO_URL`
 - Repository README: see [README.md](README.md)
 - Reward and reward integrity details: see [README.md](README.md)
+- Visual system flow and Mermaid diagrams: see [docs/submission-system-flow.md](docs/submission-system-flow.md)
+- Shareable Mermaid source and link instructions: see [docs/submission-visualization-share.md](docs/submission-visualization-share.md)
 - Submission readiness checklist: see [docs/hackathon-submission-readiness-checklist.md](docs/hackathon-submission-readiness-checklist.md)
 - Submission video script and DroneKit/SITL guide: see [docs/submission-video-script.md](docs/submission-video-script.md)
 

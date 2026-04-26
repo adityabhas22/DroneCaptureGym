@@ -1,0 +1,146 @@
+flowchart LR
+    %% DroneCaptureOps Gym - shareable hackathon hero diagram
+
+    A["Problem<br/>LLMs can answer prompts, but real inspection work needs evidence first"] --> B["DroneCaptureOps Gym<br/>OpenEnv RL environment for aerial solar inspection"]
+    B --> C["Goal<br/>Make any LLM a high-level drone inspection director"]
+
+    subgraph Deploy["Public Deployment"]
+        HF["Hugging Face Space<br/>FastAPI OpenEnv server"]
+        API["OpenEnv API<br/>reset / step / state"]
+        YAML["openenv.yaml<br/>spec_version: 1<br/>app: server.app:app"]
+        HF --> API --> YAML
+    end
+
+    subgraph Episode["One Episode Loop"]
+        Reset["reset(task, seed)<br/>deterministic mission starts"]
+        Obs["DroneObservation<br/>public state only"]
+        Agent["LLM / RL Policy<br/>scripted, random, model-backed, trained adapter"]
+        Decide["Decide missing evidence<br/>coverage? anomaly? quality? safety?"]
+        Action["Structured tool call<br/>tool_name + arguments"]
+        Validate["ToolRegistry validation<br/>schema + availability + required args"]
+        Execute["Execute tool<br/>mission, flight, camera, evidence"]
+        Next["Next observation<br/>reward + warnings + action result"]
+        Reset --> Obs --> Agent --> Decide --> Action --> Validate --> Execute --> Next --> Obs
+    end
+
+    subgraph Visible["What The Agent Can See"]
+        Checklist["Mission checklist"]
+        Telemetry["Telemetry<br/>position, battery, in_air, landed"]
+        Site["Site map<br/>solar rows B4-B8<br/>viewpoints + no-fly zones"]
+        CaptureLog["Capture log<br/>real photo IDs<br/>RGB/thermal quality metadata"]
+        Affordances["Inspection affordances<br/>blockers + suggested tools"]
+    end
+
+    subgraph Hidden["Hidden Verifier State<br/>Never Leaked"]
+        Defects["Hidden defects<br/>hotspots, diode faults, soiling"]
+        Truth["True asset state"]
+        Weather["Hidden weather details"]
+        Obstacles["Obstacle schedule"]
+        Requirements["Evidence requirements"]
+    end
+
+    subgraph Tools["High-Level Drone Tools"]
+        MissionTools["Mission / Map<br/>checklist, site map, telemetry, estimate view, route replan"]
+        FlightTools["Flight<br/>takeoff, fly_to_viewpoint, move_to_asset, hover, return_home, land"]
+        CameraTools["Camera<br/>gimbal, zoom, RGB capture, thermal capture, inspect_capture"]
+        EvidenceTools["Evidence<br/>mark_target_inspected, submit_evidence_pack"]
+    end
+
+    subgraph Sim["Simulator + Controller"]
+        Controller["GeometryController<br/>fast deterministic backend"]
+        Safety["SafetyChecker<br/>no-fly, altitude, battery, return margin"]
+        CameraModel["Camera quality model<br/>coverage, standoff, modality, occlusion"]
+        DroneKit["DroneKitSITLController<br/>future ArduPilot bridge boundary"]
+        Controller --> Safety --> CameraModel
+        Controller -. future adapter .-> DroneKit
+    end
+
+    subgraph Reward["Reward + Anti-Hallucination Gates"]
+        EvidenceScore["0.45 evidence success"]
+        CoverageScore["0.20 required coverage"]
+        IssueScore["0.15 issue capture"]
+        EfficiencyScore["0.10 operational efficiency"]
+        ReportScore["0.10 grounded report"]
+        ProcessScore["process reward <= 0.10"]
+        Penalty["penalties"]
+        Formula["weighted outcome + process - penalties"]
+        SafetyGate["Safety gate<br/>unsafe behavior caps score"]
+        IntegrityGate["Integrity gate<br/>fake photo IDs or unsupported claims cap score"]
+        FinalScore["Final score<br/>clamped to [-1, 1]"]
+        EvidenceScore --> Formula
+        CoverageScore --> Formula
+        IssueScore --> Formula
+        EfficiencyScore --> Formula
+        ReportScore --> Formula
+        ProcessScore --> Formula
+        Penalty --> Formula
+        Formula --> FinalScore
+        SafetyGate --> FinalScore
+        IntegrityGate --> FinalScore
+    end
+
+    subgraph Scenarios["What We Test"]
+        Families["6 scenario families<br/>single hotspot, soiling/shadow,<br/>bypass diode fault, glare false positive,<br/>blocked corridor, low battery"]
+        Suites["Suites<br/>smoke, curriculum_easy,<br/>curriculum_medium, hard_eval, demo, solar_tasks"]
+        Tasks["45 task-conditioned missions"]
+        DefaultTasks["Default inference tasks<br/>easy: basic_thermal_survey<br/>medium: anomaly_confirmation<br/>hard: audit_grade_strict_grounding"]
+        CoverageTasks["Coverage + quality loops"]
+        AnomalyTasks["Anomaly confirmation + triage"]
+        SafetyTasks["Safety, privacy, obstacles, route replanning"]
+        BatteryTasks["Battery and efficiency tradeoffs"]
+        GroundingTasks["False positives + grounded reporting"]
+        Families --> Suites --> Tasks --> DefaultTasks
+        Tasks --> CoverageTasks
+        Tasks --> AnomalyTasks
+        Tasks --> SafetyTasks
+        Tasks --> BatteryTasks
+        Tasks --> GroundingTasks
+    end
+
+    subgraph Training["Training + Evaluation"]
+        Data["Generate trajectories<br/>scripted / weak_scripted / random / model policy"]
+        SFT["TRL SFT warm-start<br/>training/sft_warmstart.py"]
+        Eval["Evaluate on suites<br/>smoke -> curriculum -> hard_eval -> solar_tasks"]
+        Logs["TensorBoard / W&B logs"]
+        Plots["Real loss + reward plots<br/>training/plot_training_metrics.py"]
+        Data --> SFT --> Eval --> Logs --> Plots
+    end
+
+    subgraph Submission["Hackathon Submission Package"]
+        Tests["Local validation<br/>pytest: 334 passed<br/>inference scripted: 3/3 score 1.00<br/>openenv validate: OK"]
+        Blog["BLOG.md<br/>official blog-post fallback"]
+        Flow["Mermaid visualization<br/>this diagram"]
+        Notebook["Training notebook URL"]
+        Form["Final form URLs<br/>HF Space + notebook + blog/video"]
+        Tests --> Form
+        Blog --> Form
+        Flow --> Form
+        Notebook --> Form
+    end
+
+    C --> HF
+    API --> Reset
+    Obs --> Visible
+    Hidden -. verifier only .-> Reward
+    Validate --> Tools
+    Tools --> Sim
+    Execute --> Sim
+    Sim --> CaptureLog
+    Execute --> Reward
+    CaptureLog --> Reward
+    FinalScore --> Next
+    Scenarios --> Reset
+    Episode --> Training
+    Training --> Submission
+
+    classDef blue fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#0f172a
+    classDef green fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#0f172a
+    classDef orange fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#0f172a
+    classDef red fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#0f172a
+    classDef purple fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#0f172a
+
+    class A,B,C,HF,API,Episode blue
+    class Visible,Tools,Sim,Training green
+    class Reward,SafetyGate,IntegrityGate orange
+    class Hidden,Defects,Truth,Weather,Obstacles,Requirements red
+    class Scenarios,Submission,Flow purple
